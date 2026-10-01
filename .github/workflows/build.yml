@@ -28,7 +28,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Build the portable zip
         run: python tools/build_portable.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: AniimoEggHeistMapDetector
           path: dist/AniimoEggHeistMapDetector.zip
