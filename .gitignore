@@ -9,3 +9,7 @@ __pycache__/
 tests/fixtures/
 # The tool's own M-key captures
 captures/
+# The tool's own log and settings when run from source
+log.txt
+log.txt.1
+settings.json

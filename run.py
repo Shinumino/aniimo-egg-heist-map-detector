@@ -10,6 +10,8 @@ start it reads the map pictures from your own Aniimo install (about 20 s) and ke
 import argparse
 import json
 import os
+import platform
+import time
 import sys
 import webbrowser
 
@@ -28,10 +30,12 @@ import eggheist_capture  # noqa: E402
 import eggheist_server  # noqa: E402
 import game  # noqa: E402
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 # the tool's own folder: next to Start.bat in the portable download (this file is in its app folder), else here
 TOOL_DIR = os.path.dirname(HERE) if os.path.isdir(os.path.join(os.path.dirname(HERE), "python")) else HERE
 SETTINGS = os.path.join(TOOL_DIR, "settings.json")
+LOG_FILE = os.path.join(TOOL_DIR, "log.txt")
+log = eggheist_server.log
 CACHE = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "AniimoEggHeistMapDetector")
 READY = "ready.txt"   # written last: a first start that was interrupted is simply done again
 
@@ -43,10 +47,13 @@ def load(check):
                            tile_bundles=check.tiles, icon_bundles=check.icons)
     if not os.path.exists(os.path.join(out, READY)):
         print("First start: reading the map pictures from your Aniimo install (about 20 seconds)...", flush=True)
+        log.info(f"first start: reading the map pictures into {out}")
+        t0 = time.time()
         heist.stitch_all()
         heist.extract_icons()
         with open(os.path.join(out, READY), "w") as f:
             f.write(f"{VERSION} {check.build}\n")
+        log.info(f"first start done in {time.time() - t0:.0f} s")
     return heist
 
 
@@ -66,14 +73,18 @@ def save_settings(path, data):
     os.replace(tmp, path)             # never a half-written settings file
 
 
-def game_folder(explicit=None, settings=None):
-    """Where to look for the game: --game first, then the folder chosen on the page, then Steam's libraries."""
+def game_source(explicit=None, settings=None):
+    """(the game folder or None, how it was found): --game first, then the folder chosen on the page, then Steam."""
     if explicit:
-        return game.find_game(explicit)
+        return game.find_game(explicit), "--game"
     chosen = (settings or {}).get("game")
     if chosen and game.is_game(chosen):
-        return chosen
-    return game.find_game()
+        return chosen, "the chosen folder"
+    return game.find_game(), "Steam"
+
+
+def game_folder(explicit=None, settings=None):
+    return game_source(explicit, settings)[0]
 
 
 def choose(folder, settings_file=SETTINGS, supported=None):
@@ -95,7 +106,7 @@ def choose(folder, settings_file=SETTINGS, supported=None):
 
 def on_choose(folder):
     """The page's button, for the helper: None if cancelled, (map data, None) to start, (None, why) to stay put."""
-    c = choose(folder)
+    c = choose(folder, SETTINGS)
     if c is None:
         return None
     if c.blocked:
@@ -113,8 +124,17 @@ def main(argv=None):
     ap.add_argument("--no-browser", action="store_true", help="do not open the page in the browser")
     a = ap.parse_args(argv)
     print(f"Aniimo Egg Heist Map Detector {VERSION}  (MIT, (c) 2026 Shinumino)", flush=True)
+    try:
+        eggheist_server.setup_logging(LOG_FILE)
+    except OSError as e:                  # a read-only folder must not stop the tool, only its log
+        print(f"no log file ({e})", flush=True)
+    log.info(f"Aniimo Egg Heist Map Detector {VERSION} on {platform.platform()}, Python {platform.python_version()}")
     eggheist_capture.enable_dpi_awareness()
-    c = game.check(game_folder(a.game, load_settings()))
+    folder_found, how = game_source(a.game, load_settings(SETTINGS))
+    log.info(f"game: {folder_found} (via {how})" if folder_found else f"game: not found (looked via {how})")
+    c = game.check(folder_found)
+    log.info(f"build {c.build}: ok" if not c.blocked else
+             f"blocked{f' (build {c.build})' if c.build else ''}: {c.blocked}")
     heist = None
     if c.blocked:
         print(c.blocked, flush=True)
@@ -135,7 +155,9 @@ def main(argv=None):
     print(f"Open {url}  (close this window to stop)", flush=True)
     if not a.no_browser:
         webbrowser.open(url)
-    eggheist_server.run(app, overlay=not a.no_overlay and not c.blocked)
+    log.info(f"running at {url}, captures in {folder}")
+    eggheist_server.run(app, overlay=not a.no_overlay)
+    log.info("stopped")
 
 
 if __name__ == "__main__":

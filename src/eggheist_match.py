@@ -274,14 +274,14 @@ class Matcher:
     def icon_size(self, small):
         """Size the map screen draws its icons at in this screenshot, px at WORK. Every map icon (spawn, door,
         keys, nests) has the same size, so the best door-like match anywhere tells it, even when the door
-        itself is hidden under the player arrow. It only depends on the screen, so it is worked out once per
-        screenshot size (every M-key capture has the same one): it was a quarter of each match's time."""
+        itself is hidden under the player arrow. It only depends on the screen, so it is remembered per
+        screenshot size (every M-key capture has the same one): it was a quarter of each match's time.
+        Remembered only after a match that was sure (Result.looks_like_map, see match): learning it from whatever came
+        first let a game-world capture (M pressed to close the map) teach a wrong size, and the next real
+        start screen scored its door 0.45 instead of 0.96 (2026-10-01, caught by the log)."""
         if small.shape in self._icon_px:
             return self._icon_px[small.shape]
-        size = self._find_icon_size(small)
-        if size:
-            self._icon_px[small.shape] = size
-        return size
+        return self._find_icon_size(small)
 
     def _find_icon_size(self, small):
         half = cv2.resize(small, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
@@ -367,10 +367,14 @@ class Matcher:
             lv = self.h.levels_of(sid)
             cands.append(Candidate(sid, lv[0] if lv else None, s * self.keep[sid] / f, (t[0] / f, t[1] / f), total, det))
         cands.sort(key=lambda c: -c.score)
+
         top = cands[0].map_id
         pos, half = self.art[top][2], self.keep[top]
         icons = {k: cands[0].to_screen((pos[k][0] / half, pos[k][1] / half)) for k in ("spawn", "door")}
-        return Result(cands, icons)
+        res = Result(cands, icons)
+        if icon_px and res.looks_like_map:
+            self._icon_px[small.shape] = icon_px     # a sure map was read at this size: keep it
+        return res
 
 
 if __name__ == "__main__":

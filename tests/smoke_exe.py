@@ -89,6 +89,9 @@ def real_game():
             m = get(port, "/api/latest")["match"]
             time.sleep(0.5)
         check(bool(m) and m["map_id"] == 20036 and m["confident"], f"a real screenshot is map 20036 ({m and m['map_id']})")
+        logfile = os.path.join(os.path.dirname(EXE), "log.txt")
+        text = open(logfile, encoding="utf-8").read() if os.path.exists(logfile) else ""
+        check("picture 'shot.jpg' -> map 20036 shown" in text, "log.txt names the picture and what was done with it")
     finally:
         stop(p)
         shutil.rmtree(folder, ignore_errors=True)

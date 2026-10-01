@@ -11,8 +11,12 @@ Chosen to stay as far from the game as a screenshot tool does, because the game 
 Pressing M in another window does nothing. M also CLOSES the map and M typed in the game's chat counts too;
 the server decides what to do with a capture that is not a map screen (it keeps the last map).
 """
+import logging
 import threading
 import time
+
+log = logging.getLogger("eggheist")
+QUIET = 60     # s: the same failing error is logged once per this, not every 30 ms poll
 
 WINDOW_TITLE, WINDOW_CLASS = "Aniimo", "UnityWndClass"
 VK_M = 0x4D
@@ -59,11 +63,15 @@ class Capture:
         self.on_image(img)
 
     def run(self, stop: threading.Event):
+        last = {}
         while not stop.is_set():
             try:
                 self.step()
             except Exception as e:                # a failed grab must not end the watching
-                print(f"capture failed: {e}", flush=True)
+                key = f"{type(e).__name__}: {e}"
+                if time.time() - last.get(key, 0) > QUIET:
+                    last[key] = time.time()
+                    log.exception(f"M-key capture failed: {key}")
             stop.wait(self.poll)
 
 

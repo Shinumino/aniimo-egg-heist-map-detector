@@ -38,6 +38,9 @@ The page opens in your browser at http://127.0.0.1:8765. It is only reachable fr
   the same way a screenshot tool does, and keeps it in the `captures` folder next to `Start.bat`, named with
   the time and the map. Only the newest 10 are kept. A picture you drop into that folder is recognised too
   (and never deleted).
+- **A log,** `log.txt` next to `Start.bat`: what it found at start and, for every M press, the picture it saved
+  and what it did with it. It stays small (about 1 MB plus one older file) and never leaves your PC; send it
+  when you report a problem. Folder paths in it can contain your Windows user name.
 - **It never** opens the game's process, reads its memory or sends anything anywhere. The key is read the way
   any program can ask Windows whether a key is down; it is not hooked or blocked.
 
@@ -57,9 +60,9 @@ never show you a map that is not right.
   *Choose the Aniimo folder* on the page and pick the folder it is in (or a folder above it). It remembers it.
 - **The page doesn't open:** it may already be running; look for the open window, or go to
   http://127.0.0.1:8765.
-- **It picked a wrong map:** the screenshot it used is in the `captures` folder. Please open an
-  [issue](https://github.com/Shinumino/aniimo-egg-heist-map-detector/issues) with that picture and the map it
-  should have been.
+- **It picked a wrong map:** the screenshot it used is in the `captures` folder, and `log.txt` says why it chose
+  that map. Please open an [issue](https://github.com/Shinumino/aniimo-egg-heist-map-detector/issues) with the
+  picture, `log.txt` and the map it should have been.
 - **Chaos:** the game's data has no egg nest spots for Chaos, so none are shown there.
 
 ## For developers
