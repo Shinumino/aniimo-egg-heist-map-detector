@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Egg Heist Maps</title>
+<!-- Served by src/eggheist_server.py (http://127.0.0.1:8765). It does not work opened as a file:
+     the map art and the match come from that local server. -->
+<style>
+  :root {
+    --bg: #15181e; --panel: #1f242c; --panel2: #262c36; --line: #333b47;
+    --text: #e8e6e1; --muted: #9aa3ae; --accent: #e9b949; --ok: #58c48b; --warn: #e9a049;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  #status { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .mapbox { position: relative; width: 100%; max-width: calc(100vh - 110px); aspect-ratio: 1; margin: 0 auto;
+            background: #1b1f26; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .mapbox img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .mapbox svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .empty[hidden] { display: none; }
+  #blockedbox p { margin: 0 0 14px; max-width: 520px; }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); }
+  aside { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  #title { font-size: 22px; font-weight: 600; }
+  #sub { color: var(--muted); font-size: 13px; }
+  .sure { color: var(--ok); } .unsure { color: var(--warn); }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button[aria-pressed="true"] { border-color: var(--accent); background: #3a3322; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .legend { display: grid; grid-template-columns: 26px 1fr; gap: 6px 8px; align-items: center; font-size: 14px; }
+  .legend img { width: 26px; height: 26px; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #111; margin: 0 2px; }
+  .slider { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .slider input { flex: 1; accent-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  #browse { padding: 0 16px 24px; }
+  .credit { padding: 8px 16px 24px; color: var(--muted); font-size: 12px; }
+  .credit a { color: var(--muted); }
+  #browse h2 { font-size: 15px; margin: 18px 0 8px; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .thumb { padding: 4px; text-align: center; font-size: 13px; }
+  .thumb img { width: 100%; aspect-ratio: 1; display: block; background: #1b1f26; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Egg Heist Maps</h1>
+  <span id="status">Connecting…</span>
+</header>
+<main>
+  <div class="mapbox" id="mapbox">
+    <div class="empty" id="blockedbox" hidden>
+      <div><p id="blockedmsg"></p>
+        <button id="choosegame" hidden>Choose the Aniimo folder</button></div>
+    </div>
+    <div class="empty" id="empty">Waiting for the map.<br>In the game, press M. The helper takes the screenshot by itself.<br>(A screenshot you take yourself also works.)</div>
+  </div>
+  <aside>
+    <div class="card">
+      <h2>I'm playing</h2>
+      <div id="playing" class="row"></div>
+    </div>
+    <div class="card">
+      <h2>Overlay on the game</h2>
+      <div class="row">
+        <button id="ovplace">Place overlay</button>
+        <button id="ovoff" aria-pressed="true">Off</button>
+      </div>
+      <label class="slider">Opacity <input id="ovalpha" type="range" min="20" max="100" step="5" value="90"> <span id="ovalphav">90%</span></label>
+      <div class="hint" id="ovhint">To place it: click Place overlay, press Alt+Tab to go back to the game, then drag a box where the map should go. F8 hides it for a moment. Needs the game in borderless or windowed mode.</div>
+    </div>
+    <div class="card">
+      <div id="title">No map yet</div>
+      <div id="sub"></div>
+      <div id="others" class="row" style="margin-top:8px"></div>
+    </div>
+    <div class="card" id="levelcard" hidden>
+      <h2>Show egg nests for</h2>
+      <div id="levels" class="row"></div>
+      <div id="levelnote" style="margin-top:8px;color:var(--warn);font-size:13px" hidden>No egg nest spots for this difficulty in the game data. The eggs may be placed another way; not checked in a real run yet.</div>
+    </div>
+    <div class="card" id="legend">
+      <h2>On the map</h2>
+      <div class="legend">
+        <img src="/icons/Img_Map_Mark_Uderground_Front_Door.png" alt=""><span>Spawn</span>
+        <img src="/icons/Img_Map_Mark_Uderground_Begin.png" alt=""><span>Door</span>
+        <img src="/icons/Img_Map_Mark_GrabEgg_Lair.png" alt=""><span>Egg nest (only some get an egg each run)</span>
+        <img src="/icons/Img_Map_Mark_Uderground_Key_Orange.png" alt=""><span>Key</span>
+        <span class="dot" style="background:#c79bff">R</span><span>Reward room</span>
+        <span class="dot" style="background:#c9c9c9">U</span><span>Unique building</span>
+      </div>
+    </div>
+  </aside>
+</main>
+<section id="browse"></section>
+<footer class="credit">Aniimo Egg Heist Map Detector · MIT License · © 2026 Shinumino ·
+  <a href="https://github.com/Shinumino/aniimo-egg-heist-map-detector" target="_blank" rel="noopener">GitHub</a></footer>
+
+<script>
+const ICON = {
+  spawn: "/icons/Img_Map_Mark_Uderground_Front_Door.png",
+  door: "/icons/Img_Map_Mark_Uderground_Begin.png",
+  egg: "/icons/Img_Map_Mark_GrabEgg_Lair.png",
+  key: "/icons/Img_Map_Mark_Uderground_Key_Orange.png",
+};
+const DOT = { reward: ["#c79bff", "R"], unique: ["#c9c9c9", "U"] };
+const ICON_SIZE = 110;   // art px (the art is 2048 px wide)
+
+let data = null;         // /api/maps
+let shown = { id: null, level: null, match: null };
+let lastSeq = -1;
+let wasBlocked = false;
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, kids = []) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "text" ? (e.textContent = v) : e.setAttribute(k, v);
+  for (const k of kids) e.append(k);
+  return e;
+};
+const levelName = (lv) => data.levels[lv];
+const levelsText = (id) => data.maps[id].levels.map(levelName).join(" / ");
+
+function draw() {
+  const box = $("mapbox");
+  box.querySelectorAll("img, svg").forEach((n) => n.remove());
+  if (!shown.id) return;
+  $("empty").hidden = true;
+  const size = data.size;
+  box.append(el("img", { src: `/maps/${shown.id}.webp`, alt: `Map ${shown.id}` }));
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  const marks = data.maps[shown.id].markers[shown.level] || [];
+  // icons last so they sit on top of the dots
+  for (const m of [...marks].sort((a, b) => (ICON[a.kind] ? 1 : 0) - (ICON[b.kind] ? 1 : 0))) {
+    if (ICON[m.kind]) {
+      const img = document.createElementNS(ns, "image");
+      img.setAttribute("href", ICON[m.kind]);
+      img.setAttribute("x", m.x - ICON_SIZE / 2); img.setAttribute("y", m.y - ICON_SIZE / 2);
+      img.setAttribute("width", ICON_SIZE); img.setAttribute("height", ICON_SIZE);
+      img.dataset.kind = m.kind;
+      svg.append(img);
+    } else if (DOT[m.kind]) {
+      const [color, ch] = DOT[m.kind];
+      const g = document.createElementNS(ns, "g");
+      g.dataset.kind = m.kind;
+      const c = document.createElementNS(ns, "circle");
+      c.setAttribute("cx", m.x); c.setAttribute("cy", m.y); c.setAttribute("r", 30);
+      c.setAttribute("fill", color); c.setAttribute("stroke", "#111"); c.setAttribute("stroke-width", 5);
+      const t = document.createElementNS(ns, "text");
+      t.setAttribute("x", m.x); t.setAttribute("y", m.y + 13); t.setAttribute("text-anchor", "middle");
+      t.setAttribute("font-size", 38); t.setAttribute("font-weight", 700); t.setAttribute("fill", "#111");
+      t.textContent = ch;
+      g.append(c, t);
+      svg.append(g);
+    }
+  }
+  box.append(svg);
+}
+
+function renderSide() {
+  const id = shown.id;
+  if (!id) return;
+  $("title").textContent = `Map ${id} · ${levelsText(id)}`;
+  const m = shown.match;
+  const others = $("others");
+  others.replaceChildren();
+  const list = m ? (m.shortlist || [m.map_id]).map(String) : [];
+  if (m && list.includes(id)) {   // ids arrive as numbers in the JSON, shown.id is a string
+    const sure = m.confident;
+    $("sub").replaceChildren(
+      el("span", { class: sure ? "sure" : "unsure", text: sure ? "Matched" : "Not sure yet" }),
+      document.createTextNode(sure ? ` at ${m.time}` : `: it's one of these. Explore a bit and press M again, or set what you're playing.`),
+    );
+    if (!sure) {
+      for (const sid of list) {
+        others.append(el("button", { text: sid, "data-map": sid, "aria-pressed": String(sid === id) }));
+      }
+    }
+  } else {
+    $("sub").textContent = "Picked by hand";
+  }
+  others.querySelectorAll("button").forEach((b) => (b.onclick = () => show(+b.dataset.map, null, shown.match)));
+  const levels = data.maps[id].levels;
+  $("levelcard").hidden = levels.length < 2;
+  const eggs = (data.maps[id].markers[shown.level] || []).filter((m) => m.kind === "egg").length;
+  $("levelnote").hidden = eggs > 0;
+  $("levels").replaceChildren(...levels.map((lv) => {
+    const b = el("button", { text: levelName(lv), "aria-pressed": String(String(lv) === String(shown.level)) });
+    b.onclick = () => show(id, lv, shown.match);
+    return b;
+  }));
+}
+
+function show(id, level, match) {
+  const levels = data.maps[id].levels;
+  shown = { id: String(id), level: String(level ?? levels[0]), match };
+  draw();
+  renderSide();
+}
+
+function renderBrowse() {
+  const sec = $("browse");
+  sec.append(el("h2", { text: "All maps, by difficulty" }));
+  for (const lv of Object.keys(data.pools)) {
+    if (lv === "6") continue;   // Chaos rolls the same maps as Nightmare
+    sec.append(el("h2", { text: lv === "5" ? "Nightmare / Chaos" : levelName(lv) }));
+    const grid = el("div", { class: "thumbs" });
+    for (const id of data.pools[lv]) {
+      const b = el("button", { class: "thumb", "data-map": id }, [
+        el("img", { src: `/maps/${id}.webp`, alt: "", loading: "lazy" }), el("span", { text: String(id) }),
+      ]);
+      b.onclick = () => { show(id, lv, null); window.scrollTo({ top: 0, behavior: "smooth" }); };
+      grid.append(b);
+    }
+    sec.append(grid);
+  }
+}
+
+async function poll() {
+  try {
+    const r = await (await fetch("/api/latest", { cache: "no-store" })).json();
+    $("status").textContent = r.status || "";
+    if (r.blocked) {   // the tool's game check failed: say why, and offer to point it at the game
+      wasBlocked = true;
+      $("empty").hidden = true;
+      $("blockedbox").hidden = false;
+      $("blockedmsg").textContent = r.blocked;
+      $("choosegame").hidden = !r.can_choose;
+      $("legend").hidden = true;   // its icons come from the game, which has not been read yet
+    } else if (wasBlocked) {
+      location.reload();   // the game was found: load the maps it now has
+      return;
+    }
+    followOverlay(r.overlay);
+    if (r.match && r.seq !== lastSeq) {
+      lastSeq = r.seq;
+      show(r.match.map_id, null, r.match);
+    }
+  } catch {
+    $("status").textContent = "Helper not running. Start src/eggheist_server.py and reload.";
+  }
+  setTimeout(poll, 1000);
+}
+
+// What the user is playing, remembered in this browser only (it is a convenience: the helper forgets it
+// on restart and the page sends it again). Nightmare and Chaos roll the same maps, so they are one choice.
+const PLAYING = [["any", "Any"], ["3", "Normal"], ["4", "Hard"], ["5", "Nightmare / Chaos"]];
+const KEY = "eggheist.playing";
+function remembered() { try { return localStorage.getItem(KEY) || "any"; } catch { return "any"; } }
+
+async function setPlaying(v) {
+  try { localStorage.setItem(KEY, v); } catch { /* private window: works for this visit only */ }
+  $("playing").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+  try {
+    await fetch("/api/difficulty", { method: "POST", headers: { "Content-Type": "application/json" },
+                                     body: JSON.stringify({ level: v === "any" ? null : Number(v) }) });
+  } catch { /* helper not running; poll() says so */ }
+}
+
+function renderPlaying() {
+  $("playing").replaceChildren(...PLAYING.map(([v, label]) => {
+    const b = el("button", { text: label, "data-v": v, "aria-pressed": "false" });
+    b.onclick = () => setPlaying(v);
+    return b;
+  }));
+  setPlaying(remembered());
+}
+
+// The overlay: where it goes (a box dragged on the screen; null = off) and how opaque it is. Both are
+// remembered in this browser and sent again on every load, so a restarted helper puts it back.
+const OVKEY = "eggheist.overlay";
+let overlay = { rect: null, alpha: 0.9 };
+let placingShown = false;
+function rememberedOverlay() {
+  try { return { ...overlay, ...JSON.parse(localStorage.getItem(OVKEY) || "{}") }; } catch { return overlay; }
+}
+function keepOverlay() {
+  try { localStorage.setItem(OVKEY, JSON.stringify(overlay)); } catch { /* private window */ }
+  $("ovoff").setAttribute("aria-pressed", String(overlay.rect === null));
+  $("ovalpha").value = Math.round(overlay.alpha * 100);
+  $("ovalphav").textContent = `${Math.round(overlay.alpha * 100)}%`;
+}
+async function post(path, body) {
+  try {
+    await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch { /* helper not running; poll() says so */ }
+}
+function renderOverlay() {
+  $("ovplace").onclick = () => {
+    $("ovhint").textContent = "Now press Alt+Tab to go back to the game. The screen dims there: drag a box where the map should go. Esc cancels.";
+    post("/api/overlay/place", {});
+  };
+  $("ovoff").onclick = () => { overlay.rect = null; keepOverlay(); post("/api/overlay", { rect: null }); };
+  $("ovalpha").oninput = () => { $("ovalphav").textContent = `${$("ovalpha").value}%`; };
+  $("ovalpha").onchange = () => {
+    overlay.alpha = Number($("ovalpha").value) / 100;
+    keepOverlay();
+    post("/api/overlay", { alpha: overlay.alpha });
+  };
+  overlay = rememberedOverlay();
+  keepOverlay();
+  post("/api/overlay", { rect: overlay.rect, alpha: overlay.alpha });
+}
+function followOverlay(o) {
+  // the helper is the one that knows where the drag ended: keep what it says
+  if (!o) return;
+  if (o.placing) { placingShown = true; return; }
+  if (placingShown) {
+    placingShown = false;
+    $("ovhint").textContent = o.rect ? "Placed. Place overlay again to move or resize it." : "Cancelled.";
+  }
+  if (JSON.stringify(o.rect) !== JSON.stringify(overlay.rect)) { overlay.rect = o.rect; keepOverlay(); }
+}
+
+$("choosegame").onclick = () => post("/api/game/choose", {});
+
+(async () => {
+  data = await (await fetch("/api/maps")).json();
+  renderOverlay();
+  renderPlaying();
+  renderBrowse();
+  poll();
+})();
+</script>
+</body>
+</html>

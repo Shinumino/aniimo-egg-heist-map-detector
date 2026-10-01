@@ -1,0 +1,6 @@
+# Exact versions the tool was built and tested with (2026-10-01, Python 3.14). Pinned so a rebuild of the
+# .exe is the same program; GitHub's dependency scanner reads this file.
+numpy==2.5.3
+opencv-python-headless==5.0.0.93
+pillow==12.3.0
+UnityPy==1.25.3

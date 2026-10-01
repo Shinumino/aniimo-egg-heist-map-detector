@@ -1,0 +1,11 @@
+# Weekly pull requests when a pinned dependency or a GitHub Action has an update or a security fix.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

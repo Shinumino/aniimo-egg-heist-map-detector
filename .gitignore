@@ -1,0 +1,11 @@
+# Local environment and build output
+.venv/
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+# Map screenshots for the local tests: they show the game's own art, so they never go to GitHub
+tests/fixtures/
+# The tool's own M-key captures
+captures/

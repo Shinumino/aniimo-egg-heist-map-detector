@@ -1,0 +1,52 @@
+# Every push and pull request: check dependencies for known vulnerabilities, run the tests that need no game,
+# build the portable zip. A tag v* also publishes that zip as a release: the download is built here, from
+# this code, not on anyone's PC. A red run stops the release.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14.7"
+      - name: Install
+        run: python -m pip install -r requirements-build.txt pip-audit
+      - name: Known vulnerabilities in the dependencies
+        run: python -m pip_audit -r requirements.txt
+      - name: Tests (the ones that need Aniimo installed skip themselves)
+        run: python -m unittest discover -s tests -v
+      - name: Build the portable zip
+        run: python tools/build_portable.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AniimoEggHeistMapDetector
+          path: dist/AniimoEggHeistMapDetector.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: AniimoEggHeistMapDetector
+      - name: Release notes from the changelog
+        run: python3 -c "import sys; s=open('CHANGELOG.md').read().split('\n## ')[1]; open('notes.md','w').write('## '+s)"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" AniimoEggHeistMapDetector.zip --title "${{ github.ref_name }}" --notes-file notes.md
