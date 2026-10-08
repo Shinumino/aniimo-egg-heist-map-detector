@@ -3,4 +3,4 @@
 numpy==2.5.3
 opencv-python-headless==5.0.0.93
 pillow==12.3.0
-UnityPy==1.25.3
+UnityPy==1.25.4
