@@ -4,7 +4,7 @@ Press **M** in an Operation: Egg Heist Team Mode run, and this tool shows you wh
 map, in the game's own art, with the spawn, the door, the rooms where an egg can be, the keys and the reward
 rooms. Your browser shows it, and an overlay can show it on top of the game.
 
-Works with **Aniimo build 3634150** on Windows 10 (2004 or newer) and Windows 11.
+Works with **Aniimo build 3668494** on Windows 10 (2004 or newer) and Windows 11.
 
 ## Download and start
 

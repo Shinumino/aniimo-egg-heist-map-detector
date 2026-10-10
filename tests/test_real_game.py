@@ -26,6 +26,17 @@ EXPECTED = {   # screenshot -> (map, difficulty to set or None): the user's own 
 
 
 @unittest.skipUnless(GAME, "needs Aniimo installed")
+class InstalledGameTest(unittest.TestCase):
+    """On a PC that has the game, a blocked check is a failure, not a skip. The screenshot tests below skip
+    themselves when the game is not the supported one, so on 2026-10-10 this suite was green while the tool
+    refused the installed game (Steam had moved it to build 3668494 the day before). The author's PC is the
+    only place that can notice an update before a user does."""
+
+    def test_this_version_runs_on_the_installed_game(self):
+        self.assertIsNone(game.check(GAME).blocked)
+
+
+@unittest.skipUnless(GAME, "needs Aniimo installed")
 @unittest.skipUnless(os.path.isdir(FIX), "needs the map screenshots (EGGHEIST_FIXTURES)")
 class RealGameTest(unittest.TestCase):
     @classmethod

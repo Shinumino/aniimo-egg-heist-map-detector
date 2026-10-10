@@ -17,14 +17,19 @@ from dataclasses import dataclass, field
 RELEASES_URL = "https://github.com/Shinumino/aniimo-egg-heist-map-detector/releases"
 TABLES_IN_ARCHIVE = "xfs/luascripts/Common/Data/pmdata.bin"
 LUA_ARCHIVE = os.path.join("Aniimo_Data", "StreamingAssets", "cvs", "res", "lua", "LuaScripts.xdf")
+# The game writes this file when it starts; Steam does not. Right after an update it still names the old build
+# until the game has been started once (2026-10-10: Steam's files at 3668494, this file at 3634150 a day later).
+# The check stays blocked in between, which is the safe side, but its message then names the old build.
 BUILD_FILE = os.path.join("Aniimo_Data", "cvs", "res", "lua", "LuaCacheVer.txt")
 BUNDLES = os.path.join("Aniimo_Data", "StreamingAssets", "cvs", "res", "uab", "win", "DefaultPackage")
 
-# The game files this version was made and tested for. Egg Heist data checked unchanged from build 3629693
-# (164 tables compared, 2026-10-01); the map art bundles are the same files as in 3629693.
+# The game files this version was made and tested for. Egg Heist data checked unchanged from build 3634150
+# (2026-10-10: the 61 Egg Heist tables and the Egg Heist rows of scene_data identical, none of the 169 Egg
+# Heist / random map / dungeon scripts touched, same pools, layouts and markers out of both); the map art and
+# icon bundles are the same files as in 3634150 (a bundle's name carries its MD5, checked on all eight).
 SUPPORTED = {
-    "3634150": {
-        "tables_sha256": "14552ae57c7d99279ac3791e732ca74ae5dc8cc6db38c01d0e4e0b0134fc77bb",
+    "3668494": {
+        "tables_sha256": "e7cf9bd743f39c7c07e5d82c4e166766583eb9376bd590e40556638c6f41ee32",
         "tiles": [
             "mres_xgui_exall_0_4802707611e9c5f427a3e37eed9f7b75.uab",
             "mres_xgui_exall_1_5872513a083a68228e9a224285e10cdd.uab",
