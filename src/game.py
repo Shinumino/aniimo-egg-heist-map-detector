@@ -23,13 +23,14 @@ LUA_ARCHIVE = os.path.join("Aniimo_Data", "StreamingAssets", "cvs", "res", "lua"
 BUILD_FILE = os.path.join("Aniimo_Data", "cvs", "res", "lua", "LuaCacheVer.txt")
 BUNDLES = os.path.join("Aniimo_Data", "StreamingAssets", "cvs", "res", "uab", "win", "DefaultPackage")
 
-# The game files this version was made and tested for. Egg Heist data checked unchanged from build 3634150
-# (2026-10-10: the 61 Egg Heist tables and the Egg Heist rows of scene_data identical, none of the 169 Egg
-# Heist / random map / dungeon scripts touched, same pools, layouts and markers out of both); the map art and
-# icon bundles are the same files as in 3634150 (a bundle's name carries its MD5, checked on all eight).
+# The game files this version was made and tested for. Egg Heist data checked unchanged from build 3668494
+# (2026-10-14: the 62 Egg Heist tables, scene_data included, identical; of the 211 Egg Heist / random map /
+# dungeon scripts only ClientRogueDungeon changed, and its new string constants read as an Xbox Series S memory
+# unload; the update was mainly Boss Rush, the overworld and translations); the map art and icon bundles are
+# the same files as in 3668494 (a bundle's name carries its MD5, checked on all eight).
 SUPPORTED = {
-    "3668494": {
-        "tables_sha256": "e7cf9bd743f39c7c07e5d82c4e166766583eb9376bd590e40556638c6f41ee32",
+    "3714366": {
+        "tables_sha256": "56fb9d17b93b191d89beed9ccd85cea7377648811dc1dd371081154cd3f5de88",
         "tiles": [
             "mres_xgui_exall_0_4802707611e9c5f427a3e37eed9f7b75.uab",
             "mres_xgui_exall_1_5872513a083a68228e9a224285e10cdd.uab",

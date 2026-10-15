@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.3 (2026-10-14)
+
+Works with Aniimo build 3714366.
+
+- Aniimo updated on 2026-10-14 and 1.0.2 stopped, as it should. This version works with the new game build.
+  The Egg Heist maps did not change in that update.
+- If the page still names the old build after you update, start the game once, then start the tool again: the
+  game only notes its new build number when it starts.
+
 ## 1.0.2 (2026-10-10)
 
 Works with Aniimo build 3668494.
