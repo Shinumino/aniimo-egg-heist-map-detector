@@ -28,8 +28,8 @@ BUNDLES = os.path.join("Aniimo_Data", "StreamingAssets", "cvs", "res", "uab", "w
 # dungeon scripts only ClientRogueDungeon changed, its Xbox Series S memory unload now reads isConsole; the
 # update was mainly a season event, cosmetics and translations). Two map art bundles have new names (exall_3
 # and exall_4, a bundle's name carries its MD5), but every map picture inside them decodes to the same pixels
-# as before: the only change is one Aniimo's event sprite added to each. The other five and the icon bundle
-# are the same files as in 3714366.
+# as before: the only changes are event sprites of one Aniimo (one added to each, and one in exall_3 changed),
+# outside /MapRes/, so nothing the tool reads. The other five and the icon bundle are the same files as in 3714366.
 SUPPORTED = {
     "3732728": {
         "tables_sha256": "07738bfef21acf4fb8c90b701ddbf408591a6db6abce1a7f009088b5950a56bf",
