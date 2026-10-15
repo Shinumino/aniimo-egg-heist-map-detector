@@ -23,20 +23,22 @@ LUA_ARCHIVE = os.path.join("Aniimo_Data", "StreamingAssets", "cvs", "res", "lua"
 BUILD_FILE = os.path.join("Aniimo_Data", "cvs", "res", "lua", "LuaCacheVer.txt")
 BUNDLES = os.path.join("Aniimo_Data", "StreamingAssets", "cvs", "res", "uab", "win", "DefaultPackage")
 
-# The game files this version was made and tested for. Egg Heist data checked unchanged from build 3668494
-# (2026-10-14: the 62 Egg Heist tables, scene_data included, identical; of the 211 Egg Heist / random map /
-# dungeon scripts only ClientRogueDungeon changed, and its new string constants read as an Xbox Series S memory
-# unload; the update was mainly Boss Rush, the overworld and translations); the map art and icon bundles are
-# the same files as in 3668494 (a bundle's name carries its MD5, checked on all eight).
+# The game files this version was made and tested for. Egg Heist data checked unchanged from build 3714366
+# (2026-10-15: the 64 Egg Heist tables, scene_data included, identical; of the 211 Egg Heist / random map /
+# dungeon scripts only ClientRogueDungeon changed, its Xbox Series S memory unload now reads isConsole; the
+# update was mainly a season event, cosmetics and translations). Two map art bundles have new names (exall_3
+# and exall_4, a bundle's name carries its MD5), but every map picture inside them decodes to the same pixels
+# as before: the only change is one Aniimo's event sprite added to each. The other five and the icon bundle
+# are the same files as in 3714366.
 SUPPORTED = {
-    "3714366": {
-        "tables_sha256": "56fb9d17b93b191d89beed9ccd85cea7377648811dc1dd371081154cd3f5de88",
+    "3732728": {
+        "tables_sha256": "07738bfef21acf4fb8c90b701ddbf408591a6db6abce1a7f009088b5950a56bf",
         "tiles": [
             "mres_xgui_exall_0_4802707611e9c5f427a3e37eed9f7b75.uab",
             "mres_xgui_exall_1_5872513a083a68228e9a224285e10cdd.uab",
             "mres_xgui_exall_2_04d0b78f6318a83be968ab8ecfda7616.uab",
-            "mres_xgui_exall_3_c20353d70b1e5231c63da3e54bdb4930.uab",
-            "mres_xgui_exall_4_10d9a0ebeea12109ca0c0a8ee770ee69.uab",
+            "mres_xgui_exall_3_5d2442490953c8ca176948939047a015.uab",
+            "mres_xgui_exall_4_aa903dacc376bea9c5a489b1afd09652.uab",
             "mres_xgui_exall_5_e13f209185f8641c0da275b68b638f45.uab",
             "mres_xgui_exall_6_19682ce4c7424954b60fafb274bc0a84.uab",
         ],

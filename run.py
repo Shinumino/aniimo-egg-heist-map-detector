@@ -30,7 +30,7 @@ import eggheist_capture  # noqa: E402
 import eggheist_server  # noqa: E402
 import game  # noqa: E402
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 # the tool's own folder: next to Start.bat in the portable download (this file is in its app folder), else here
 TOOL_DIR = os.path.dirname(HERE) if os.path.isdir(os.path.join(os.path.dirname(HERE), "python")) else HERE
 SETTINGS = os.path.join(TOOL_DIR, "settings.json")
