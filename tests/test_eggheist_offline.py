@@ -6,6 +6,7 @@ Shipped to the public project by tools/export_detector.py. Needs numpy, OpenCV a
     .venv/Scripts/python.exe -m unittest tests.test_eggheist_offline
 """
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -73,6 +74,13 @@ class NestChanceTest(unittest.TestCase):
                    70: {"spawnGroups": [group(1, 71), {"weight": 3, "spawnIds": {}}]}})
         self.assertEqual(h._nest_chance(7), [([1, 0, 2], 0.25)])
 
+    def test_two_spawners_with_a_nest_in_the_same_spot_roll_on_their_own(self):
+        # audit r2, 2026-10-16: no test had two spawners both placing a nest; 25% and 25% is 43.75%, not 25%
+        h = heist({7: {"spawners": [60, 70]}}, {7: [(61, EGG, [1, 0, 2]), (71, EGG, [1, 0, 2])]},
+                  {60: {"spawnGroups": [group(1, 61), group(3, 62)]},
+                   70: {"spawnGroups": [group(1, 71), group(3, 72)]}})
+        self.assertEqual(h._nest_chance(7), [([1, 0, 2], 0.4375)])
+
     def test_a_room_with_no_nest_icon_has_none(self):
         h = heist({7: {"spawners": [70]}}, {7: []}, {70: {"spawnGroups": [group(1, 71)]}})
         self.assertEqual(h._nest_chance(7), [])
@@ -108,10 +116,50 @@ class ChanceLabelTest(unittest.TestCase):
         self.assertEqual(anchor, "mt")
         self.assertGreater(box[1], 400 + self.O.ICON_ART_PX / 2)
 
+    # small things right beside the icon, one per close side (audit r2: these spots had no test)
+    RIGHT, LEFT, BELOW, ABOVE = (565, 395, 585, 405), (415, 395, 435, 405), (495, 465, 505, 475), (495, 325, 505, 335)
+
+    def test_above_the_icon_when_right_left_and_below_are_taken(self):
+        (x, y, anchor), box = self.O.label_spot(500, 400, 113, 2048, 2048, avoid=[self.RIGHT, self.LEFT, self.BELOW])
+        self.assertEqual(anchor, "mb")
+        self.assertLess(box[3], 400 - self.O.ICON_ART_PX / 2)
+
+    def test_one_text_height_further_when_all_four_close_spots_are_taken(self):
+        # 20039 at Nightmare: the picture's edge, a key, an R dot and a pulled-out floor around one egg
+        (x, y, anchor), box = self.O.label_spot(500, 400, 113, 2048, 2048,
+                                                avoid=[self.RIGHT, self.LEFT, self.BELOW, self.ABOVE])
+        self.assertEqual(anchor, "lm")
+        self.assertEqual(box[0], 500 + self.O.ICON_ART_PX / 2 + 6 + self.O.CHANCE_PX)
+
+    def test_with_nothing_free_it_still_stays_in_the_picture(self):
+        (x, y, anchor), box = self.O.label_spot(1900, 400, 113, 2048, 2048, avoid=[(0, 0, 2048, 2048)])
+        self.assertTrue(0 <= box[0] and box[2] <= 2048, box)
+
+    def test_a_chance_on_a_pulled_out_floor_keeps_off_the_markers_there(self):
+        # Gemini, audit r2: a nest upstairs stands inside its pulled-out floor, which counted as taken, so every
+        # spot "collided" and the text fell back onto whatever was on its right. None is upstairs in 3732728.
+        import eggheist_overlay
+
+        class Upstairs:
+            @staticmethod
+            def markers(sid, lv):
+                return [{"kind": "egg", "chance": 0.25, "art": (500, 500), "floor": 2},
+                        {"kind": "key", "chance": None, "art": (621, 500), "floor": 2}]
+        cards = eggheist_overlay.Cards.__new__(eggheist_overlay.Cards)
+        cards.h = Upstairs()
+        placed, labels = cards._layout((1000, 1000), 1, 5, (0, 0), pulled=[(300, 300, 700, 700)])
+        (m, text, (x, y, anchor), box), = labels
+        self.assertEqual(anchor, "rm", "left, off the key, still on its floor")
+
 
 class PictureSaveTest(unittest.TestCase):
     """A map picture is written whole or not at all (ChatGPT, 2026-10-16: closing the tool while it wrote one
     left a broken file that later starts took as done, so Upper showed a broken picture for good)."""
+
+    def folder(self):
+        d = tempfile.mkdtemp(prefix="eggheist-save-")
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        return d
 
     def test_an_interrupted_write_leaves_nothing_under_the_real_name(self):
         import eggheist_server
@@ -122,16 +170,34 @@ class PictureSaveTest(unittest.TestCase):
                     f.write(b"RIFF half a picture")
                 raise KeyboardInterrupt("the window was closed")
 
-        d = tempfile.mkdtemp(prefix="eggheist-save-")
+        d = self.folder()
         path = os.path.join(d, "20036-upper.webp")
         with self.assertRaises(KeyboardInterrupt):
             eggheist_server.save_picture(Breaks(), path)
-        self.assertFalse(os.path.exists(path))
+        self.assertEqual(os.listdir(d), [], "neither the picture nor its half-written temporary file")
+
+    def test_a_rename_that_fails_leaves_no_temporary_file(self):
+        # Gemini, audit r2: a rename refused by Windows (a scanner holding the file) left the .tmp behind
+        import eggheist_server
+        from PIL import Image
+        d = self.folder()
+        path = os.path.join(d, "20036.webp")
+        real = os.replace
+
+        def refused(a, b):
+            raise PermissionError("in use")
+        os.replace = refused
+        try:
+            with self.assertRaises(PermissionError):
+                eggheist_server.save_picture(Image.new("RGBA", (8, 8)), path)
+        finally:
+            os.replace = real
+        self.assertEqual(os.listdir(d), [])
 
     def test_a_finished_write_is_there(self):
         import eggheist_server
         from PIL import Image
-        d = tempfile.mkdtemp(prefix="eggheist-save-")
+        d = self.folder()
         path = os.path.join(d, "20036.webp")
         eggheist_server.save_picture(Image.new("RGBA", (8, 8), (1, 2, 3, 255)), path)
         self.assertEqual(Image.open(path).size, (8, 8))

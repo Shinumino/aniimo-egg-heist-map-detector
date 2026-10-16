@@ -88,15 +88,16 @@ WEBP_QUALITY = 82
 def save_picture(img, path):
     """A map picture for the page, written whole or not at all. The page's pictures are made once and then taken
     as done because they exist, so a half-written one (the window closed while writing it) would stay broken for
-    good (audit, 2026-10-16): write a temporary file, then rename it."""
+    good (audit, 2026-10-16): write a temporary file, then rename it. A failed rename (a scanner holding the file)
+    removes the temporary file too."""
     tmp = path + ".tmp"
     try:
         img.save(tmp, "WEBP", quality=WEBP_QUALITY)
+        os.replace(tmp, path)
     except BaseException:
         if os.path.exists(tmp):
             os.remove(tmp)
         raise
-    os.replace(tmp, path)
 
 
 KEEP = 10                  # captures kept; older ones the helper saved are deleted (user: so they do not pile up)

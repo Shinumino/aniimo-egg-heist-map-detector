@@ -143,14 +143,18 @@ class Cards:
             x, y = spot(m)[0] - origin[0], spot(m)[1] - origin[1]
             half = ICON_ART_PX / 2 if m["kind"] in ICONS else DOT_R if m["kind"] in DOTS else 0
             placed.append((m, x, y, (x - half, y - half, x + half, y + half)))
-        taken = [(a[0] - origin[0], a[1] - origin[1], a[2] - origin[0], a[3] - origin[1]) for a in pulled]
-        taken += [box for _, _, _, box in placed]
+        floors = [(a[0] - origin[0], a[1] - origin[1], a[2] - origin[0], a[3] - origin[1]) for a in pulled]
+        taken = floors + [box for _, _, _, box in placed]
         labels, font = [], _font(CHANCE_PX)
         for m, x, y, box in placed:
             if m["kind"] in ICONS and m.get("chance") is not None:
                 # user, 2026-10-15 (picked from three): "an egg icon in the locked room with the chance next to it"
                 text = chance_text(m["chance"])
-                at, where = label_spot(x, y, font.getlength(text), size[0], size[1], [t for t in taken if t is not box])
+                # a marker upstairs stands on its own pulled-out floor: that floor is where its text may go
+                # (audit r2, 2026-10-16: counted as taken, every spot collided)
+                own = [f for f in floors if f[0] <= x <= f[2] and f[1] <= y <= f[3]]
+                at, where = label_spot(x, y, font.getlength(text), size[0], size[1],
+                                       [t for t in taken if t is not box and t not in own])
                 labels.append((m, text, at, where))
                 taken.append(where)
         return placed, labels
