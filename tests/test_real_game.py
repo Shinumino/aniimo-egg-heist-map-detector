@@ -37,21 +37,19 @@ class InstalledGameTest(unittest.TestCase):
 
 
 @unittest.skipUnless(GAME, "needs Aniimo installed")
-@unittest.skipUnless(os.path.isdir(FIX), "needs the map screenshots (EGGHEIST_FIXTURES)")
-class RealGameTest(unittest.TestCase):
+class RealGameDataTest(unittest.TestCase):
+    """What the tool reads from the installed game. Needs only the game, not the screenshots (audit, 2026-10-16:
+    these were behind the screenshots' skip and so never ran on a PC with the game but no screenshots)."""
+
     @classmethod
     def setUpClass(cls):
-        import cv2
         import run
-        import eggheist_match
-        cls.cv2 = cv2
         cls.check = game.check(GAME)
         if cls.check.blocked:
             raise unittest.SkipTest(f"installed game is not the supported one: {cls.check.blocked}")
         cls.cache = tempfile.mkdtemp(prefix="eggheist-cache-")
         run.CACHE = cls.cache
         cls.heist = run.load(cls.check)
-        cls.matcher = eggheist_match.Matcher(cls.heist)
 
     @classmethod
     def tearDownClass(cls):
@@ -86,7 +84,29 @@ class RealGameTest(unittest.TestCase):
                 chances = [m for m in marks if m["kind"] == "egg" and m["chance"] is not None]
                 self.assertEqual(sorted(m["room"] for m in chances), locked, (sid, lv))
         eggs = [m for m in self.heist.markers(20036, 5) if m["kind"] == "egg"]
-        self.assertEqual(sorted(m["chance"] for m in eggs if m["chance"]), [0.21, 0.5])
+        self.assertEqual(sorted(m["chance"] for m in eggs if m["chance"] is not None), [0.21, 0.5])
+
+
+@unittest.skipUnless(GAME, "needs Aniimo installed")
+@unittest.skipUnless(os.path.isdir(FIX), "needs the map screenshots (EGGHEIST_FIXTURES)")
+class RealGameTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import cv2
+        import run
+        import eggheist_match
+        cls.cv2 = cv2
+        cls.check = game.check(GAME)
+        if cls.check.blocked:
+            raise unittest.SkipTest(f"installed game is not the supported one: {cls.check.blocked}")
+        cls.cache = tempfile.mkdtemp(prefix="eggheist-cache-")
+        run.CACHE = cls.cache
+        cls.heist = run.load(cls.check)
+        cls.matcher = eggheist_match.Matcher(cls.heist)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(getattr(cls, "cache", ""), ignore_errors=True)
 
     def test_the_real_screenshots_give_the_same_maps(self):
         for name, (sid, lv) in EXPECTED.items():

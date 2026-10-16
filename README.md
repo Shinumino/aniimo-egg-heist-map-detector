@@ -29,7 +29,8 @@ The page opens in your browser at http://127.0.0.1:8765. It is only reachable fr
   overlay shows over the game in borderless or windowed mode, not in exclusive fullscreen.
 - **Egg nests:** the marked rooms are where an egg *can* be. The game picks which of them get an egg each run.
 - **Locked rooms:** a key marks a room you need a key to open. Inside, a nest is only there in some runs: the
-  egg icon in a locked room says how often (25% = about one run in four).
+  egg icon in a locked room says how often (25% = about one run in four). The % is worked out from the game's
+  data, not counted in real runs.
 - **Second floors:** a room outlined and tagged **2F** has an upstairs, reached by the stairs inside that room.
   On the page, *Ground / Upper* switches to the game's picture of the upper floors, and a line says which floor
   the eggs, the keys and the door are on. The overlay shows both at once: each second floor sits next to its

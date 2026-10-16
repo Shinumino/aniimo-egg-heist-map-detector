@@ -33,12 +33,33 @@ ICONS = {"spawn": "Img_Map_Mark_Uderground_Front_Door", "door": "Img_Map_Mark_Ud
          "egg": "Img_Map_Mark_GrabEgg_Lair", "key": "Img_Map_Mark_Uderground_Key_Orange"}
 ICON_ART_PX = 110                             # icon size in 2048-px art units, as on the page
 DOTS = {"reward": ((199, 155, 255), "R"), "unique": ((201, 201, 201), "U")}
-CHANCE_PX = 56                                # the "25%" beside a locked room's egg nest, in art units
+DOT_R = 30                                    # the R / U dots' radius, in art units, as on the page
+CHANCE_PX = 56                               # the "25%" beside a locked room's egg nest, in art units
 
 
 def chance_text(chance):
     """A locked room's egg nest: the share of runs it is there, as the page writes it too (25%)."""
     return f"{round(chance * 100)}%"
+
+
+def label_spot(x, y, text_w, right_edge, bottom_edge=float("inf"), avoid=()):
+    """Where the "25%" of an egg icon centred at (x, y) goes: ((x, y, anchor) for ImageDraw.text, its box). Right
+    of the icon, else left, below or above it, the first where it stays in the picture and covers nothing in
+    `avoid` (boxes in the same space: pulled-out floors, other markers, other chances). Audit, 2026-10-16: on
+    maps 20057 and 20059 it ran past the right edge and was cut; on 20036 it ran into a pulled-out floor, and
+    moved left into another one; on 20057 moved left it sat on the R dot. When all four sides are taken (20039:
+    the picture's edge, a key, an R dot and a pulled-out floor around one egg) the same four one text height
+    further out."""
+    h, spots = CHANCE_PX, []
+    for gap in (ICON_ART_PX / 2 + 6, ICON_ART_PX / 2 + 6 + CHANCE_PX):
+        spots += [((x + gap, y, "lm"), (x + gap, y - h / 2, x + gap + text_w, y + h / 2)),
+                  ((x - gap, y, "rm"), (x - gap - text_w, y - h / 2, x - gap, y + h / 2)),
+                  ((x, y + gap, "mt"), (x - text_w / 2, y + gap, x + text_w / 2, y + gap + h)),
+                  ((x, y - gap, "mb"), (x - text_w / 2, y - gap - h, x + text_w / 2, y - gap))]
+    inside = [s for s in spots if s[1][0] >= 0 and s[1][1] >= 0 and s[1][2] <= right_edge and s[1][3] <= bottom_edge]
+    clear = [s for s in inside if not any(b[0] < a[2] and a[0] < b[2] and b[1] < a[3] and a[1] < b[3]
+                                         for b in [s[1]] for a in avoid)]
+    return (clear or inside or spots)[0]
 
 
 def _font(px):
@@ -81,25 +102,29 @@ class Cards:
         return self._cache[key]
 
     def _map(self, sid, floors):
-        """(the picture, its top-left corner in the map's 2048 px space, where a marker goes in that space)."""
+        """(the picture, its top-left corner in the map's 2048 px space, where a marker goes in that space, the
+        pulled-out second floors as boxes in that space, outline included)."""
         if floors:
             if sid not in self._both:
                 self._both = {sid: eggheist_floors.compose(self.h, sid)}   # one map at a time, like the card
             pic = self._both[sid]
-            return pic.image.copy(), pic.view[:2], pic.spot
+            o = eggheist_floors.OUTLINE
+            pulled = [(c["at"][0] - o, c["at"][1] - o, c["at"][0] + c["rect"][2] - c["rect"][0] + o,
+                       c["at"][1] + c["rect"][3] - c["rect"][1] + o) for c in pic.cards if c["at"]]
+            return pic.image.copy(), pic.view[:2], pic.spot, pulled
         art = self.h.art(sid)
         if sid not in self._crop:
             self._crop[sid] = art.getchannel("A").getbbox() or (0, 0, 2048, 2048)
         x0, y0, x1, y1 = self._crop[sid]
         pad = 40
         x0, y0, x1, y1 = max(0, x0 - pad), max(0, y0 - pad), min(2048, x1 + pad), min(2048, y1 + pad)
-        return art.crop((x0, y0, x1, y1)).copy(), (x0, y0), lambda m: m["art"]
+        return art.crop((x0, y0, x1, y1)).copy(), (x0, y0), lambda m: m["art"], []
 
     def _draw(self, match, box, lv, markers, floors=True):
         sid = match["map_id"]
-        mp, origin, spot = self._map(sid, floors)
+        mp, origin, spot, pulled = self._map(sid, floors)
         if markers:
-            self._markers(mp, sid, lv, origin, spot)
+            self._markers(mp, sid, lv, origin, spot, pulled)
         bw, bh = box
         s = min((bh - TITLE_H) / mp.height, bw / mp.width)
         mp = mp.resize((max(1, int(mp.width * s)), max(1, int(mp.height * s))), Image.LANCZOS)
@@ -109,23 +134,43 @@ class Cards:
         d.text((12, TITLE_H // 2), self.title(match), font=_font(20), fill=(232, 230, 225, 255), anchor="lm")
         return out
 
-    def _markers(self, mp, sid, lv, origin, spot=lambda m: m["art"]):
-        """`spot`: where a marker goes in the map's 2048 px space (on its pulled-out floor if it is upstairs)."""
-        d = ImageDraw.Draw(mp)
-        marks = self.h.markers(sid, lv)
-        for m in sorted(marks, key=lambda m: m["kind"] in self.icons):        # icons on top of dots
+    def _layout(self, size, sid, lv, origin, spot=lambda m: m["art"], pulled=()):
+        """Where everything goes in a picture of `size` whose top-left is `origin` in the map's 2048 px space:
+        ([(marker, x, y, its box)], [(marker, chance text, (x, y, anchor), its box)]). `spot`: where a marker goes
+        in that space (on its pulled-out floor if it is upstairs); `pulled`: the pulled-out second floors there."""
+        placed = []
+        for m in self.h.markers(sid, lv):
             x, y = spot(m)[0] - origin[0], spot(m)[1] - origin[1]
+            half = ICON_ART_PX / 2 if m["kind"] in ICONS else DOT_R if m["kind"] in DOTS else 0
+            placed.append((m, x, y, (x - half, y - half, x + half, y + half)))
+        taken = [(a[0] - origin[0], a[1] - origin[1], a[2] - origin[0], a[3] - origin[1]) for a in pulled]
+        taken += [box for _, _, _, box in placed]
+        labels, font = [], _font(CHANCE_PX)
+        for m, x, y, box in placed:
+            if m["kind"] in ICONS and m.get("chance") is not None:
+                # user, 2026-10-15 (picked from three): "an egg icon in the locked room with the chance next to it"
+                text = chance_text(m["chance"])
+                at, where = label_spot(x, y, font.getlength(text), size[0], size[1], [t for t in taken if t is not box])
+                labels.append((m, text, at, where))
+                taken.append(where)
+        return placed, labels
+
+    def _markers(self, mp, sid, lv, origin, spot=lambda m: m["art"], pulled=()):
+        """Draws the markers, and a locked room's egg chance beside its icon where it covers nothing (_layout)."""
+        d = ImageDraw.Draw(mp)
+        placed, labels = self._layout(mp.size, sid, lv, origin, spot, pulled)
+        for m, x, y, _ in sorted(placed, key=lambda p: p[0]["kind"] in self.icons):        # icons on top of dots
             if m["kind"] in self.icons:
                 ic = self.icons[m["kind"]].resize((ICON_ART_PX, ICON_ART_PX), Image.LANCZOS)
                 mp.alpha_composite(ic, (int(x - ICON_ART_PX / 2), int(y - ICON_ART_PX / 2)))
-                if m.get("chance"):
-                    # user, 2026-10-15 (picked from three): "an egg icon in the locked room with the chance next to it"
-                    d.text((x + ICON_ART_PX / 2 + 6, y), chance_text(m["chance"]), font=_font(CHANCE_PX),
-                           fill=(255, 255, 255, 255), anchor="lm", stroke_width=7, stroke_fill=(17, 17, 17, 255))
             elif m["kind"] in DOTS:
                 color, ch = DOTS[m["kind"]]
-                d.ellipse((x - 30, y - 30, x + 30, y + 30), fill=color + (255,), outline=(17, 17, 17, 255), width=5)
+                d.ellipse((x - DOT_R, y - DOT_R, x + DOT_R, y + DOT_R), fill=color + (255,), outline=(17, 17, 17, 255), width=5)
                 d.text((x, y), ch, font=_font(40), fill=(17, 17, 17, 255), anchor="mm")
+        font = _font(CHANCE_PX)
+        for _, text, (tx, ty, anchor), _ in labels:
+            d.text((tx, ty), text, font=font, fill=(255, 255, 255, 255), anchor=anchor,
+                   stroke_width=7, stroke_fill=(17, 17, 17, 255))
 
 
 # -- the window ------------------------------------------------------------------------------------------------

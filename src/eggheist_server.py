@@ -85,6 +85,20 @@ PAGE = os.path.join(getattr(sys, "_MEIPASS", ROOT), "web", "eggheist.html")
 WEBP_QUALITY = 82
 
 
+def save_picture(img, path):
+    """A map picture for the page, written whole or not at all. The page's pictures are made once and then taken
+    as done because they exist, so a half-written one (the window closed while writing it) would stay broken for
+    good (audit, 2026-10-16): write a temporary file, then rename it."""
+    tmp = path + ".tmp"
+    try:
+        img.save(tmp, "WEBP", quality=WEBP_QUALITY)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    os.replace(tmp, path)
+
+
 KEEP = 10                  # captures kept; older ones the helper saved are deleted (user: so they do not pile up)
 OWN_NAME = re.compile(r"^\d{4}-\d{2}-\d{2} \d{6}( \(\d+\))? .+\.jpg$")   # how _save names its files
 
@@ -145,7 +159,7 @@ class App:
                 "levels": levels,
                 # "chance": only on a locked room's own egg nest, the share of runs it is there (eggheist.markers)
                 "markers": {str(lv): [{"kind": m["kind"], "x": round(m["art"][0], 1), "y": round(m["art"][1], 1),
-                                       "floor": m["floor"], **({"chance": m["chance"]} if m["chance"] else {})}
+                                       "floor": m["floor"], **({"chance": m["chance"]} if m["chance"] is not None else {})}
                                       for m in self.heist.markers(sid, lv)] for lv in levels},
                 # the rooms with a second floor, each as its box on the picture (about 0.9 s for the 21 maps:
                 # it looks at the game's upper pictures to see where a floor is really drawn)
@@ -154,7 +168,7 @@ class App:
             for name, art in ((f"{sid}.webp", self.heist.art), (f"{sid}-upper.webp", self.heist.upper_art)):
                 webp = os.path.join(self.web_dir, name)
                 if not os.path.exists(webp):
-                    art(sid).save(webp, "WEBP", quality=WEBP_QUALITY)
+                    save_picture(art(sid), webp)
         self.maps_json = json.dumps({
             "pools": {str(lv): self.heist.pool(lv) for lv in eggheist.TEAM_LEVELS},
             "levels": {str(k): v for k, v in eggheist.LEVEL_NAMES.items()},

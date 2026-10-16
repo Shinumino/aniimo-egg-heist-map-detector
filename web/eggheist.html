@@ -122,6 +122,7 @@ const ICON = {
 };
 const DOT = { reward: ["#c79bff", "R"], unique: ["#c9c9c9", "U"] };
 const ICON_SIZE = 110;   // art px (the art is 2048 px wide)
+const DOT_R = 30;        // the R / U dots' radius
 const ACCENT = "#e9b949";
 const KIND = { spawn: "the spawn", door: "the door", egg: "an egg nest", key: "a key", reward: "a reward room", unique: "a unique building" };
 // A second floor sits right over its own room, so the map has two pictures: the ground floor, and the game's
@@ -182,25 +183,13 @@ function draw() {
       img.dataset.kind = m.kind;
       if (faint) img.setAttribute("opacity", 0.3);
       svg.append(img);
-      if (m.chance) {
-        // a locked room's own egg nest: the share of runs it is there (user, 2026-10-15: "an egg icon in the
-        // locked room with the chance next to it")
-        const t = document.createElementNS(ns, "text");
-        t.setAttribute("x", m.x + ICON_SIZE / 2 + 6); t.setAttribute("y", m.y + 20);
-        t.setAttribute("font-size", 56); t.setAttribute("font-weight", 700); t.setAttribute("fill", "#fff");
-        t.setAttribute("stroke", "#111"); t.setAttribute("stroke-width", 14); t.setAttribute("paint-order", "stroke");
-        t.dataset.chance = m.chance;
-        if (faint) t.setAttribute("opacity", 0.3);
-        t.textContent = `${Math.round(m.chance * 100)}%`;
-        svg.append(t);
-      }
     } else if (DOT[m.kind]) {
       const [color, ch] = DOT[m.kind];
       const g = document.createElementNS(ns, "g");
       g.dataset.kind = m.kind;
       if (faint) g.setAttribute("opacity", 0.3);
       const c = document.createElementNS(ns, "circle");
-      c.setAttribute("cx", m.x); c.setAttribute("cy", m.y); c.setAttribute("r", 30);
+      c.setAttribute("cx", m.x); c.setAttribute("cy", m.y); c.setAttribute("r", DOT_R);
       c.setAttribute("fill", color); c.setAttribute("stroke", "#111"); c.setAttribute("stroke-width", 5);
       const t = document.createElementNS(ns, "text");
       t.setAttribute("x", m.x); t.setAttribute("y", m.y + 13); t.setAttribute("text-anchor", "middle");
@@ -211,6 +200,45 @@ function draw() {
     }
   }
   box.append(svg);
+  // A locked room's own egg nest: the share of runs it is there (user, 2026-10-15: "an egg icon in the locked
+  // room with the chance next to it"), beside its icon where it covers nothing. Measured once drawn, so the
+  // svg is in the page first.
+  const taken = marks.map((m) => {
+    const h = ICON[m.kind] ? ICON_SIZE / 2 : DOT[m.kind] ? DOT_R : 0;
+    return [m.x - h, m.y - h, m.x + h, m.y + h];
+  });
+  marks.forEach((m, i) => {
+    if (!ICON[m.kind] || m.chance == null) return;
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("font-size", 56); t.setAttribute("font-weight", 700); t.setAttribute("fill", "#fff");
+    t.setAttribute("stroke", "#111"); t.setAttribute("stroke-width", 14); t.setAttribute("paint-order", "stroke");
+    t.setAttribute("dominant-baseline", "central");
+    t.dataset.chance = m.chance;
+    if ((m.floor || 1) !== shown.floor) t.setAttribute("opacity", 0.3);
+    t.textContent = `${Math.round(m.chance * 100)}%`;
+    svg.append(t);
+    const b = t.getBBox();
+    const [x, y, anchor, where] = labelSpot(m.x, m.y, b.width, b.height, size, taken.filter((_, j) => j !== i));
+    t.setAttribute("x", x); t.setAttribute("y", y); t.setAttribute("text-anchor", anchor);
+    taken.push(where);
+  });
+}
+
+// Where a chance's text goes, as [x, y, text-anchor, its box]: right of the icon at (x, y), else left, below or
+// above it, then the same one text height further out; the first inside the map that covers nothing in `avoid`.
+// The overlay does the same (src/eggheist_overlay.py label_spot). Audit, 2026-10-16: on 20057 and 20059 it ran
+// past the map's right edge and was cut.
+function labelSpot(x, y, w, h, edge, avoid) {
+  const spots = [];
+  for (const gap of [ICON_SIZE / 2 + 6, ICON_SIZE / 2 + 6 + h]) {
+    spots.push([x + gap, y, "start", [x + gap, y - h / 2, x + gap + w, y + h / 2]],
+               [x - gap, y, "end", [x - gap - w, y - h / 2, x - gap, y + h / 2]],
+               [x, y + gap + h / 2, "middle", [x - w / 2, y + gap, x + w / 2, y + gap + h]],
+               [x, y - gap - h / 2, "middle", [x - w / 2, y - gap - h, x + w / 2, y - gap]]);
+  }
+  const hit = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  const inside = spots.filter((s) => s[3][0] >= 0 && s[3][1] >= 0 && s[3][2] <= edge && s[3][3] <= edge);
+  return inside.find((s) => !avoid.some((a) => hit(s[3], a))) || inside[0] || spots[0];
 }
 
 function renderSide() {
@@ -240,7 +268,7 @@ function renderSide() {
   $("levelcard").hidden = levels.length < 2;
   // nest rooms vs a locked room's own nest (it has a chance): Chaos has no nest room in the data, only those
   const eggs = (data.maps[id].markers[shown.level] || []).filter((m) => m.kind === "egg");
-  const locked = eggs.filter((m) => m.chance).length;
+  const locked = eggs.filter((m) => m.chance != null).length;
   $("levelnote").hidden = eggs.length > locked;
   $("levelnote").textContent = locked
     ? "No egg nest rooms for this difficulty in the game data: only the locked rooms can have a nest (the %). Not checked in a real run yet."

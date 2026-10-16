@@ -143,23 +143,32 @@ class Heist:
         return self._marks.get(int(sb_id), [])
 
     def _nest_chance(self, sb_id):
-        """A locked room's own egg nest: (where, the share of runs it is there), or None if it has none.
-        The room's spawner places one of its weighted variants each run (spawnGroups, by weight); the nest is
-        the entity carrying the egg icon, so its share is the weight of the variants that hold it over all of
-        them. Build 3732728: every key piece has one, 16% to 50%, in the same spot in each variant that has it."""
-        nests = {mid: pos for mid, cid, pos in self._mark_rows(sb_id) if cid in MARK_EGG}
+        """A locked room's own egg nests: [(where, the share of runs a nest is there)], one per spot; [] if none.
+        The room's spawner places one of its weighted variants each run (spawnGroups, by weight); a nest is an
+        entity carrying the egg icon, so a spot's share is the weight of the variants with a nest there over all
+        of them. A variant that is never placed (weight 0) holds no nest. Build 3732728: every key piece has one
+        spot, 16% to 50%. Each spot keeps its own share (audit, 2026-10-16: two spots pooled into one marker would
+        put the other's chance on it and leave the other unmarked)."""
+        nests = {mid: tuple(pos) for mid, cid, pos in self._mark_rows(sb_id) if cid in MARK_EGG}
         if not nests:
-            return None
+            return []
         if self._spawners is None:
             self._spawners = self.pm.module(f"Scene.{LIBRARY}.scene_spawner_data")
+        chance = {}      # spot -> the share of runs it has a nest
         for sp_id in (_get(self.sandboxes, sb_id) or {}).get("spawners") or []:
             groups = (_get(self._spawners, sp_id) or {}).get("spawnGroups") or []
-            hit = [g for g in groups if isinstance(g["spawnIds"], list) and nests.keys() & set(g["spawnIds"])]
-            total = sum(g["weight"] for g in groups)
-            if hit and total:
-                where = nests[next(i for i in hit[0]["spawnIds"] if i in nests)]
-                return where, sum(g["weight"] for g in hit) / total
-        return None
+            total = sum(g.get("weight") or 0 for g in groups)
+            weight = {}
+            for g in groups:
+                ids = g.get("spawnIds") if isinstance(g.get("spawnIds"), list) else []   # empty is written {}
+                for spot in {nests[i] for i in ids if i in nests}:
+                    weight[spot] = weight.get(spot, 0) + (g.get("weight") or 0)
+            for spot, w in weight.items():
+                if w > 0:
+                    p = w / total      # exactly the weights' share for one spawner, the case in every real room
+                    q = chance.get(spot)
+                    chance[spot] = p if q is None else p + q - p * q    # two spawners roll on their own
+        return [(list(spot), c) for spot, c in chance.items()]
 
     def _mark_of(self, sb_id, kinds):
         """Where the game draws this sandbox's icon of one of `kinds`; None if it has none."""
@@ -197,8 +206,7 @@ class Heist:
                         found.append(("egg", self._at_mark(sb_id, MARK_EGG, pos), None))
                 elif (key := self._mark_of(sb_id, MARK_KEY)) is not None:
                     found.append(("key", key, None))
-                    if (nest := self._nest_chance(sb_id)) is not None:
-                        found.append(("egg", *nest))
+                    found += [("egg", where, chance) for where, chance in self._nest_chance(sb_id)]
             if room["roomType"] == 5:
                 found.append(("reward", [0, 0, 0], None))
             if "Uniq" in room["resId"]:
