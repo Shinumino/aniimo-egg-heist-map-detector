@@ -58,10 +58,21 @@ class RealGameTest(unittest.TestCase):
         shutil.rmtree(getattr(cls, "cache", ""), ignore_errors=True)
 
     def test_the_first_start_leaves_a_complete_cache(self):
+        import run
         out = os.path.join(self.cache, self.check.build)
-        self.assertTrue(os.path.exists(os.path.join(out, "ready.txt")))
-        self.assertEqual(len([n for n in os.listdir(os.path.join(out, "maps")) if n.endswith(".png")]), 30)
+        self.assertTrue(os.path.exists(os.path.join(out, run.READY)))
+        names = [n for n in os.listdir(os.path.join(out, "maps")) if n.endswith(".png")]
+        self.assertEqual(len([n for n in names if not n.endswith("-upper.png")]), 30)     # every map
+        self.assertEqual(len([n for n in names if n.endswith("-upper.png")]), 30)         # and its upper floors
         self.assertIn("Img_Map_Mark_Uderground_Begin.png", os.listdir(os.path.join(out, "icons")))
+
+    def test_second_floors_come_out_of_the_real_game(self):
+        # the game's own upper pictures and the room data agree: 20056 has one room with an upstairs, and
+        # nothing the map marks is upstairs on any map
+        self.assertEqual([u["room"] for u in self.heist.upstairs(20056)], [7])
+        floors = {m["floor"] for sid in self.heist.team_maps() for lv in self.heist.levels_of(sid)
+                  for m in self.heist.markers(sid, lv)}
+        self.assertEqual(floors, {1})
 
     def test_the_real_screenshots_give_the_same_maps(self):
         for name, (sid, lv) in EXPECTED.items():

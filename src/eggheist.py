@@ -15,6 +15,10 @@ What the game does (build 3603741 and 3629693 identical on all of this, checked 
 - World -> map pixel: scene_data pairs two map points (MapAPosition/MapBPosition, y counted negative going
   down) with two world points (PointAPositon/PointBPosition, x and z). Linear per axis. Checked pixel-exact
   on 20036 and 20056 by drawing every corridor piece on the art.
+- Second floors (2026-10-10): every room of a layout is on one level. Certain room pieces have an upper level,
+  marked by a box in Scene.10000.scene_area_data that starts 3.5 to 12 above the room's floor and switches the
+  map screen to a second picture of the same scene (the same bundles, MapRes/Texture/<id>_1/2/...): the ground
+  floor dimmed, each upper floor drawn in place over its room. Nothing the map marks is on an upper floor.
 """
 import glob
 import math
@@ -38,10 +42,28 @@ SANDBOX_EGG_NEST = 4   # sandBoxConfigType of egg nests; sandBoxLevel = hardLv
 # map_mark_resource_data ids of the icons the map screen draws (Scene.10000.scene_mark_point_data.markConfigId)
 MARK_SPAWN, MARK_DOOR, MARK_EGG = {1009}, {1008}, {1014}   # Uderground_Front_Door, Uderground_Begin, GrabEgg_Lair
 MARK_KEY = {1996, 1997, 1998, 1011}                        # blue / purple / gold key room, key door
+# Second floors. What an Egg Heist room tells the map screen when you go upstairs (changeMapLayerData's
+# arguments), which is also the address of the picture shown then:
+# MapRes/Texture/<id>_1/2/UI_Img_Map_Layer_<id>_1_2_0_<col>_<row>.png
+UPPER_LAYER = (1, 2, 0)
+# In that picture the ground floor is dimmed and the upper floors are not. Measured on four maps (2026-10-10):
+# 82% of the drawn pixels are darker than 40, 10% are the 40-80 backdrop of a two-floor room, 6% are upper floor
+# at 170-200, and under 1% fall in 80-110.
+UPPER_BRIGHT = 110
+UPPER_DRAWN = 0.005    # share of a room's box that must be upper floor: the smallest real one (30_006) has 0.021
+# How far below the start of a room's upper box something can be and still stand on the upper floor (the box may
+# start above the floor boards). Things on a ground floor sit within 0.5 of it, and the lowest box starts 3.5 up.
+FLOOR_MARGIN = 1.0
 
 
 def _get(table, key):
     return table.get(key, table.get(str(key)))
+
+
+def floor_of(height, starts):
+    """1 for the ground floor, 2 for upstairs: `height` above the room's floor, against the heights where the
+    room's upper boxes start (none = the room has one floor)."""
+    return 2 if any(height >= s - FLOOR_MARGIN for s in starts) else 1
 
 
 class Heist:
@@ -60,6 +82,7 @@ class Heist:
         self.sandboxes = self.pm.module(f"Scene.{LIBRARY}.scene_sandbox_data")
         self.out = out
         self._rooms, self._art, self._marks = {}, {}, None
+        self._boxes, self._upstairs = None, {}
 
     # -- which maps -------------------------------------------------------------------------------------
     def pool(self, hard_lv):
@@ -122,9 +145,12 @@ class Heist:
         return fallback
 
     def markers(self, sid, hard_lv):
-        """Everything worth pointing at, for one difficulty: spawn, door, egg (possible), key, reward, unique."""
+        """Everything worth pointing at, for one difficulty: spawn, door, egg (possible), key, reward, unique.
+        Each says which floor it is on: 1, or 2 when it stands on the room's upper floor."""
         out = []
+        boxes = self._layer_boxes()
         for room in self.rooms(sid):
+            starts = [boxes[int(i)][1] for i in room.get("sandboxIds", []) if int(i) in boxes]
             found = []
             for sb_id in room.get("sandboxIds", []):
                 sb = _get(self.sandboxes, sb_id) or {}
@@ -145,7 +171,7 @@ class Heist:
             for kind, pos in found:
                 wx, wz = self._room_to_world(room, pos)
                 out.append({"kind": kind, "world": (wx, wz), "art": self.world_to_art(sid, wx, wz),
-                            "room": room["id"], "prefab": room["resId"][1:-7]})
+                            "room": room["id"], "prefab": room["resId"][1:-7], "floor": floor_of(pos[1], starts)})
         return out
 
     @staticmethod
@@ -175,20 +201,81 @@ class Heist:
         bundles = self.tile_bundles or glob.glob(os.path.join(ROOT, "builds", self.build, "raw", "uab", "mres_xgui_exall_*.uab"))
         if not bundles:
             sys.exit(f"no mres_xgui_exall_*.uab in builds/{self.build}/raw/uab: copy them from the game first")
-        tiles = {}
+        tiles, upper = {}, {}
         pat = re.compile(r"/MapRes/Texture/(\d+)/UI_Img_Map_\1_(\d+)_(\d+)\.png$")
+        a, b, c = UPPER_LAYER
+        up = re.compile(rf"/MapRes/Texture/(\d+)_{a}/{b}/UI_Img_Map_Layer_\1_{a}_{b}_{c}_(\d+)_(\d+)\.png$")
         for f in bundles:
             for path, obj in UnityPy.load(f).container.items():
-                m = pat.search(path)
-                if m and obj.type.name == "Texture2D":
-                    tiles.setdefault(int(m.group(1)), {})[(int(m.group(2)), int(m.group(3)))] = obj.read().image
+                for rx, into in ((pat, tiles), (up, upper)):
+                    m = rx.search(path)
+                    if m and obj.type.name == "Texture2D":
+                        into.setdefault(int(m.group(1)), {})[(int(m.group(2)), int(m.group(3)))] = obj.read().image
         os.makedirs(os.path.join(self.out, "maps"), exist_ok=True)
         for sid in self.all_maps():
-            canvas = Image.new("RGBA", (2048, 2048), (0, 0, 0, 0))
-            for (col, row), im in tiles.get(sid, {}).items():
-                canvas.paste(im.convert("RGBA"), (col * 256, row * 256))
-            canvas.save(self.art_path(sid))
+            for found, path in ((tiles, self.art_path(sid)), (upper, self.upper_art_path(sid))):
+                canvas = Image.new("RGBA", (2048, 2048), (0, 0, 0, 0))
+                for (col, row), im in found.get(sid, {}).items():
+                    canvas.paste(im.convert("RGBA"), (col * 256, row * 256))
+                canvas.save(path)
         return len(tiles)
+
+    # -- second floors ----------------------------------------------------------------------------------
+    # In the layouts every room is on one level. A second floor is the upper part of certain room pieces, and
+    # each sits directly over its own room: corridor pieces have none, so two second floors never join.
+    def _layer_boxes(self):
+        """Library sandbox id -> ((min x, min z, max x, max z) in the room's own coordinates, the height above
+        the room's floor where it starts): the boxes that tell the map screen which layer to show
+        (Scene.10000.scene_area_data, event changeMapLayerData)."""
+        if self._boxes is None:
+            self._boxes = {}
+            areas = self.pm.module(f"Scene.{LIBRARY}.scene_area_data")
+            for a in areas.values() if isinstance(areas, dict) else areas:
+                events = [e for lg in a.get("logics") or [] for e in lg.get("enterEvents") or []]
+                if any(e[0] == "changeMapLayerData" for e in events):
+                    self._boxes[int(a["sandboxId"])] = (tuple(a["areaAABB"]), a["position"][1])
+        return self._boxes
+
+    def upper_art_path(self, sid):
+        return os.path.join(self.out, "maps", f"{sid}-upper.png")
+
+    def upper_art(self, sid):
+        """The game's own picture of this scene's upper floors, 2048x2048 RGBA: the ground floor dimmed, every
+        second floor drawn in place over its room (what the map screen shows while you are upstairs).
+        Read from disk each time: 21 of these held in memory would be 350 MB."""
+        from PIL import Image
+        if not os.path.exists(self.upper_art_path(sid)):   # a cache made before this picture was read
+            self.stitch_all()
+        return Image.open(self.upper_art_path(sid)).convert("RGBA")
+
+    def upper_floor_mask(self, sid):
+        """Where that picture draws an upper floor: a 2048x2048 array of True / False."""
+        import numpy as np
+        up = self.upper_art(sid)
+        return (np.asarray(up.convert("L")) > UPPER_BRIGHT) & (np.asarray(up.getchannel("A")) > 0)
+
+    def upstairs(self, sid):
+        """The rooms of this map that have a second floor, in room order:
+        [{"room": id, "rect": (left, top, right, bottom) in art px, "start": height where the upper box begins}].
+        Only rooms where the game's own picture draws an upper floor. The small 20_003 piece carries a box too,
+        but nothing is drawn in it on any map (2026-10-10), so there would be nothing to show for it; whether
+        it has an upstairs in the game is an open question."""
+        if sid not in self._upstairs:
+            drawn, out = self.upper_floor_mask(sid), []
+            for room in self.rooms(sid):
+                for sb_id in room.get("sandboxIds", []):
+                    box = self._layer_boxes().get(int(sb_id))
+                    if not box:
+                        continue
+                    (x0, z0, x1, z1), start = box
+                    pts = [self.world_to_art(sid, *self._room_to_world(room, [x, 0, z])) for x in (x0, x1) for z in (z0, z1)]
+                    left, top = max(0, round(min(p[0] for p in pts))), max(0, round(min(p[1] for p in pts)))
+                    right, bottom = min(2048, round(max(p[0] for p in pts))), min(2048, round(max(p[1] for p in pts)))
+                    if right > left and bottom > top and drawn[top:bottom, left:right].mean() > UPPER_DRAWN:
+                        out.append({"room": room["id"], "rect": (left, top, right, bottom), "start": start})
+                        break
+            self._upstairs[sid] = out
+        return self._upstairs[sid]
 
 
     def extract_icons(self):

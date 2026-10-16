@@ -18,6 +18,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 import eggheist
+import eggheist_floors
 
 MIN_W, MIN_H = 160, 120                       # smallest dragged box that still shows a readable map
 TITLE_H = 44                                  # px, the strip above the map
@@ -44,11 +45,13 @@ def _font(px):
 
 
 class Cards:
-    """Draws the overlay's picture: a title line and the map, cropped to where it is drawn, with markers."""
+    """Draws the overlay's picture: a title line and the map, cropped to where it is drawn, with markers.
+    The map comes with its second floors beside their rooms (src/eggheist_floors.py) unless that is turned off:
+    the overlay takes no clicks, so it cannot have a button to switch floors."""
 
     def __init__(self, heist):
         self.h = heist
-        self._cache, self._crop = {}, {}
+        self._cache, self._crop, self._both = {}, {}, {}
         self.icons = {k: Image.open(os.path.join(heist.out, "icons", v + ".png")).convert("RGBA") for k, v in ICONS.items()}
 
     def title(self, match):
@@ -59,28 +62,38 @@ class Cards:
             return f"Map {match['map_id']} · {names}"
         return "One of: " + ", ".join(str(i) for i in ids) + " (press M again after exploring)"
 
-    def card(self, match, max_px=None, level=None, markers=True, box=None):
-        """The card, at most `max_px` on its long side, or fitted inside `box` (w, h), keeping the map's shape."""
+    def card(self, match, max_px=None, level=None, markers=True, box=None, floors=True):
+        """The card, at most `max_px` on its long side, or fitted inside `box` (w, h), keeping the map's shape.
+        `floors`: with each second floor pulled out beside its room; False = the ground map alone."""
         box = tuple(box) if box else (max_px, max_px)
         sid = match["map_id"]
         levels = self.h.levels_of(sid)
         lv = level if level in levels else (levels[0] if levels else 5)
-        key = (sid, tuple(match.get("shortlist") or ()), bool(match.get("confident")), box, lv, markers)
+        key = (sid, tuple(match.get("shortlist") or ()), bool(match.get("confident")), box, lv, markers, bool(floors))
         if key not in self._cache:
-            self._cache = {key: self._draw(match, box, lv, markers)}   # one card at a time is all it shows
+            self._cache = {key: self._draw(match, box, lv, markers, floors)}   # one card at a time is all it shows
         return self._cache[key]
 
-    def _draw(self, match, box, lv, markers):
-        sid = match["map_id"]
+    def _map(self, sid, floors):
+        """(the picture, its top-left corner in the map's 2048 px space, where a marker goes in that space)."""
+        if floors:
+            if sid not in self._both:
+                self._both = {sid: eggheist_floors.compose(self.h, sid)}   # one map at a time, like the card
+            pic = self._both[sid]
+            return pic.image.copy(), pic.view[:2], pic.spot
         art = self.h.art(sid)
         if sid not in self._crop:
             self._crop[sid] = art.getchannel("A").getbbox() or (0, 0, 2048, 2048)
         x0, y0, x1, y1 = self._crop[sid]
         pad = 40
         x0, y0, x1, y1 = max(0, x0 - pad), max(0, y0 - pad), min(2048, x1 + pad), min(2048, y1 + pad)
-        mp = art.crop((x0, y0, x1, y1)).copy()
+        return art.crop((x0, y0, x1, y1)).copy(), (x0, y0), lambda m: m["art"]
+
+    def _draw(self, match, box, lv, markers, floors=True):
+        sid = match["map_id"]
+        mp, origin, spot = self._map(sid, floors)
         if markers:
-            self._markers(mp, sid, lv, (x0, y0))
+            self._markers(mp, sid, lv, origin, spot)
         bw, bh = box
         s = min((bh - TITLE_H) / mp.height, bw / mp.width)
         mp = mp.resize((max(1, int(mp.width * s)), max(1, int(mp.height * s))), Image.LANCZOS)
@@ -90,11 +103,12 @@ class Cards:
         d.text((12, TITLE_H // 2), self.title(match), font=_font(20), fill=(232, 230, 225, 255), anchor="lm")
         return out
 
-    def _markers(self, mp, sid, lv, origin):
+    def _markers(self, mp, sid, lv, origin, spot=lambda m: m["art"]):
+        """`spot`: where a marker goes in the map's 2048 px space (on its pulled-out floor if it is upstairs)."""
         d = ImageDraw.Draw(mp)
         marks = self.h.markers(sid, lv)
         for m in sorted(marks, key=lambda m: m["kind"] in self.icons):        # icons on top of dots
-            x, y = m["art"][0] - origin[0], m["art"][1] - origin[1]
+            x, y = spot(m)[0] - origin[0], spot(m)[1] - origin[1]
             if m["kind"] in self.icons:
                 ic = self.icons[m["kind"]].resize((ICON_ART_PX, ICON_ART_PX), Image.LANCZOS)
                 mp.alpha_composite(ic, (int(x - ICON_ART_PX / 2), int(y - ICON_ART_PX / 2)))
@@ -274,7 +288,7 @@ class Overlay:
             self._alpha = settings["alpha"]
             self.win.set_alpha(self._alpha)
         x, y, w, h = rect
-        img = self.cards.card(match, box=(w, h), level=self.app.difficulty)
+        img = self.cards.card(match, box=(w, h), level=self.app.difficulty, floors=settings.get("floors", True))
         pos = (x + (w - img.width) // 2, y + (h - img.height) // 2)       # centred in the dragged box
         if self._shown != (id(img), pos) or not self.win.visible():
             self.win.show(img, pos)

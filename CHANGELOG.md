@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0 (unreleased)
+
+Works with Aniimo build 3732728.
+
+- Second floors. Rooms that have an upstairs are outlined and tagged 2F on the map.
+- On the page, a Ground / Upper switch shows the game's own picture of the upper floors. A line under it says
+  which floor the eggs, the keys and the door are on. On every map so far: all on the ground floor.
+- On the overlay, each second floor is drawn next to its room with an arrow from the room to it, so both floors
+  are in one map. The *Second floors* button on the page turns this off if you want the map bigger.
+- The first start after updating reads the map pictures again (about 20 seconds): it now keeps the upper floors
+  too.
+
 ## 1.0.4 (2026-10-15)
 
 Works with Aniimo build 3732728.

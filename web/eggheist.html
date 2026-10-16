@@ -38,6 +38,7 @@
   .legend { display: grid; grid-template-columns: 26px 1fr; gap: 6px 8px; align-items: center; font-size: 14px; }
   .legend img { width: 26px; height: 26px; }
   .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #111; margin: 0 2px; }
+  .twofloor { width: 22px; height: 18px; border: 3px solid var(--accent); margin: 0 2px; }
   .slider { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; color: var(--muted); }
   .slider input { flex: 1; accent-color: var(--accent); }
   .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
@@ -73,6 +74,7 @@
       <div class="row">
         <button id="ovplace">Place overlay</button>
         <button id="ovoff" aria-pressed="true">Off</button>
+        <button id="ovfloors" aria-pressed="true">Second floors</button>
       </div>
       <label class="slider">Opacity <input id="ovalpha" type="range" min="20" max="100" step="5" value="90"> <span id="ovalphav">90%</span></label>
       <div class="hint" id="ovhint">To place it: click Place overlay, press Alt+Tab to go back to the game, then drag a box where the map should go. F8 hides it for a moment. Needs the game in borderless or windowed mode.</div>
@@ -87,6 +89,11 @@
       <div id="levels" class="row"></div>
       <div id="levelnote" style="margin-top:8px;color:var(--warn);font-size:13px" hidden>No egg nest spots for this difficulty in the game data. The eggs may be placed another way; not checked in a real run yet.</div>
     </div>
+    <div class="card" id="floorcard" hidden>
+      <h2>Floor</h2>
+      <div id="floors" class="row"></div>
+      <div class="hint" id="floornote"></div>
+    </div>
     <div class="card" id="legend">
       <h2>On the map</h2>
       <div class="legend">
@@ -96,6 +103,7 @@
         <img src="/icons/Img_Map_Mark_Uderground_Key_Orange.png" alt=""><span>Key</span>
         <span class="dot" style="background:#c79bff">R</span><span>Reward room</span>
         <span class="dot" style="background:#c9c9c9">U</span><span>Unique building</span>
+        <span class="twofloor"></span><span>Room with an upstairs (2F)</span>
       </div>
     </div>
   </aside>
@@ -113,9 +121,14 @@ const ICON = {
 };
 const DOT = { reward: ["#c79bff", "R"], unique: ["#c9c9c9", "U"] };
 const ICON_SIZE = 110;   // art px (the art is 2048 px wide)
+const ACCENT = "#e9b949";
+const KIND = { spawn: "the spawn", door: "the door", egg: "an egg nest", key: "a key", reward: "a reward room", unique: "a unique building" };
+// A second floor sits right over its own room, so the map has two pictures: the ground floor, and the game's
+// own picture of the upper floors (ground floor dimmed). Rooms that have one are outlined on both.
+const FLOORS = [[1, "Ground"], [2, "Upper"]];
 
 let data = null;         // /api/maps
-let shown = { id: null, level: null, match: null };
+let shown = { id: null, level: null, match: null, floor: 1 };
 let lastSeq = -1;
 let wasBlocked = false;
 
@@ -135,24 +148,44 @@ function draw() {
   if (!shown.id) return;
   $("empty").hidden = true;
   const size = data.size;
-  box.append(el("img", { src: `/maps/${shown.id}.webp`, alt: `Map ${shown.id}` }));
+  const upper = shown.floor === 2;
+  box.append(el("img", { src: `/maps/${shown.id}${upper ? "-upper" : ""}.webp`, alt: `Map ${shown.id}${upper ? ", upper floors" : ""}` }));
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  // the rooms with an upstairs: an outline and a 2F tag, under the markers
+  for (const u of data.maps[shown.id].upstairs || []) {
+    const [left, top, right, bottom] = u.rect;
+    const o = document.createElementNS(ns, "rect");
+    o.setAttribute("x", left); o.setAttribute("y", top); o.setAttribute("width", right - left); o.setAttribute("height", bottom - top);
+    o.setAttribute("fill", "none"); o.setAttribute("stroke", ACCENT); o.setAttribute("stroke-width", 8);
+    o.dataset.upstairs = u.room;
+    const tag = document.createElementNS(ns, "rect");
+    tag.setAttribute("x", left); tag.setAttribute("y", top); tag.setAttribute("width", 92); tag.setAttribute("height", 58);
+    tag.setAttribute("fill", ACCENT);
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", left + 46); t.setAttribute("y", top + 45); t.setAttribute("text-anchor", "middle");
+    t.setAttribute("font-size", 44); t.setAttribute("font-weight", 700); t.setAttribute("fill", "#111");
+    t.textContent = "2F";
+    svg.append(o, tag, t);
+  }
   const marks = data.maps[shown.id].markers[shown.level] || [];
-  // icons last so they sit on top of the dots
+  // icons last so they sit on top of the dots; what is on the other floor is shown faint
   for (const m of [...marks].sort((a, b) => (ICON[a.kind] ? 1 : 0) - (ICON[b.kind] ? 1 : 0))) {
+    const faint = (m.floor || 1) !== shown.floor;
     if (ICON[m.kind]) {
       const img = document.createElementNS(ns, "image");
       img.setAttribute("href", ICON[m.kind]);
       img.setAttribute("x", m.x - ICON_SIZE / 2); img.setAttribute("y", m.y - ICON_SIZE / 2);
       img.setAttribute("width", ICON_SIZE); img.setAttribute("height", ICON_SIZE);
       img.dataset.kind = m.kind;
+      if (faint) img.setAttribute("opacity", 0.3);
       svg.append(img);
     } else if (DOT[m.kind]) {
       const [color, ch] = DOT[m.kind];
       const g = document.createElementNS(ns, "g");
       g.dataset.kind = m.kind;
+      if (faint) g.setAttribute("opacity", 0.3);
       const c = document.createElementNS(ns, "circle");
       c.setAttribute("cx", m.x); c.setAttribute("cy", m.y); c.setAttribute("r", 30);
       c.setAttribute("fill", color); c.setAttribute("stroke", "#111"); c.setAttribute("stroke-width", 5);
@@ -199,11 +232,22 @@ function renderSide() {
     b.onclick = () => show(id, lv, shown.match);
     return b;
   }));
+  $("floorcard").hidden = (data.maps[id].upstairs || []).length === 0;
+  $("floors").replaceChildren(...FLOORS.map(([f, label]) => {
+    const b = el("button", { text: label, "data-floor": f, "aria-pressed": String(shown.floor === f) });
+    b.onclick = () => { shown.floor = f; draw(); renderSide(); };
+    return b;
+  }));
+  const up = [...new Set((data.maps[id].markers[shown.level] || []).filter((m) => m.floor === 2).map((m) => KIND[m.kind]))];
+  $("floornote").textContent = up.length
+    ? `Upstairs on this map: ${up.join(", ")}.`
+    : "Eggs, keys and the door are all on the ground floor.";
 }
 
 function show(id, level, match) {
   const levels = data.maps[id].levels;
-  shown = { id: String(id), level: String(level ?? levels[0]), match };
+  // a new map opens on the ground floor; the same map keeps the floor you were looking at
+  shown = { id: String(id), level: String(level ?? levels[0]), match, floor: String(id) === shown.id ? shown.floor : 1 };
   draw();
   renderSide();
 }
@@ -276,10 +320,11 @@ function renderPlaying() {
   setPlaying(remembered());
 }
 
-// The overlay: where it goes (a box dragged on the screen; null = off) and how opaque it is. Both are
-// remembered in this browser and sent again on every load, so a restarted helper puts it back.
+// The overlay: where it goes (a box dragged on the screen; null = off), how opaque it is, and whether it shows
+// each second floor beside its room (it takes no clicks, so it cannot switch floors the way this page does).
+// All are remembered in this browser and sent again on every load, so a restarted helper puts them back.
 const OVKEY = "eggheist.overlay";
-let overlay = { rect: null, alpha: 0.9 };
+let overlay = { rect: null, alpha: 0.9, floors: true };
 let placingShown = false;
 function rememberedOverlay() {
   try { return { ...overlay, ...JSON.parse(localStorage.getItem(OVKEY) || "{}") }; } catch { return overlay; }
@@ -287,6 +332,7 @@ function rememberedOverlay() {
 function keepOverlay() {
   try { localStorage.setItem(OVKEY, JSON.stringify(overlay)); } catch { /* private window */ }
   $("ovoff").setAttribute("aria-pressed", String(overlay.rect === null));
+  $("ovfloors").setAttribute("aria-pressed", String(overlay.floors !== false));
   $("ovalpha").value = Math.round(overlay.alpha * 100);
   $("ovalphav").textContent = `${Math.round(overlay.alpha * 100)}%`;
 }
@@ -301,6 +347,11 @@ function renderOverlay() {
     post("/api/overlay/place", {});
   };
   $("ovoff").onclick = () => { overlay.rect = null; keepOverlay(); post("/api/overlay", { rect: null }); };
+  $("ovfloors").onclick = () => {
+    overlay.floors = overlay.floors === false;
+    keepOverlay();
+    post("/api/overlay", { floors: overlay.floors });
+  };
   $("ovalpha").oninput = () => { $("ovalphav").textContent = `${$("ovalpha").value}%`; };
   $("ovalpha").onchange = () => {
     overlay.alpha = Number($("ovalpha").value) / 100;
@@ -308,8 +359,9 @@ function renderOverlay() {
     post("/api/overlay", { alpha: overlay.alpha });
   };
   overlay = rememberedOverlay();
+  overlay.floors = overlay.floors !== false;   // anything but a plain "off" left by an older page is on
   keepOverlay();
-  post("/api/overlay", { rect: overlay.rect, alpha: overlay.alpha });
+  post("/api/overlay", { rect: overlay.rect, alpha: overlay.alpha, floors: overlay.floors });
 }
 function followOverlay(o) {
   // the helper is the one that knows where the drag ended: keep what it says

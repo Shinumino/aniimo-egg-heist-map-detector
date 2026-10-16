@@ -28,6 +28,10 @@ The page opens in your browser at http://127.0.0.1:8765. It is only reachable fr
   should go. The *Opacity* slider sets how solid it is, **F8** hides it for a moment, *Off* removes it. The
   overlay shows over the game in borderless or windowed mode, not in exclusive fullscreen.
 - **Egg nests:** the marked rooms are where an egg *can* be. The game picks which of them get an egg each run.
+- **Second floors:** a room outlined and tagged **2F** has an upstairs, reached by the stairs inside that room.
+  On the page, *Ground / Upper* switches to the game's picture of the upper floors, and a line says which floor
+  the eggs, the keys and the door are on. The overlay shows both at once: each second floor sits next to its
+  room, joined to it by an arrow. *Second floors* turns that off.
 
 ## What it reads, what it keeps
 

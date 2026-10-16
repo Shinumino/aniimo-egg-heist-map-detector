@@ -18,6 +18,14 @@ Security pass (house rules, 2026-09-30):
   so no path from a request ever reaches the file system.
 - new permission: none. Hostile case: a local program could flood the folder with images; only the newest
   pending file is matched per poll, so the cost is capped at one match (~6 s CPU) at a time.
+
+Security pass for the second floors (2026-10-10):
+- new input: none from outside. The upper pictures come out of the same game bundles as the map art; the one
+  new setting (the overlay's second floors on / off) arrives through the existing JSON-only POST and must be
+  true or false.
+- new surface: one route, /maps/<known map id>-upper.webp, on the same allow-list (known id, fixed ending).
+- new permission: none. Hostile case: nothing new to spend; drawing both floors costs ~0.2 s when the shown
+  map changes, and the off switch (the page's "Second floors" button) is read on every overlay tick.
 """
 import argparse
 import json
@@ -107,14 +115,13 @@ class App:
         self.pick_folder, self.on_choose, self._choosing = pick_folder or pick_folder_dialog, on_choose, False
         self.heist, self.matcher, self.blocked = heist, None, blocked
         self.difficulty = None     # 3 Normal, 4 Hard, 5 Nightmare/Chaos (same maps); None = any. Set by the page.
-        # set by the page: where the overlay goes (dragged on screen; None = off), how opaque, and whether a
-        # drag is under way
-        self._overlay = {"rect": None, "alpha": eggheist_overlay.ALPHA, "placing": False}
+        # set by the page: where the overlay goes (dragged on screen; None = off), how opaque, whether a drag is
+        # under way, and whether the second floors are drawn beside their rooms (on unless switched off)
+        self._overlay = {"rect": None, "alpha": eggheist_overlay.ALPHA, "placing": False, "floors": True}
         self._own = set()          # files this helper saved itself: never re-matched as "new screenshots"
         self.keep = KEEP
         self.latest = {"match": None, "seq": 0, "status": "starting", "difficulty": None, "blocked": blocked,
-                       "can_choose": on_choose is not None,
-                       "overlay": {"rect": None, "alpha": eggheist_overlay.ALPHA, "placing": False}}
+                       "can_choose": on_choose is not None, "overlay": dict(self._overlay)}
         self._stop = threading.Event()
         self._lock = threading.Lock()
 
@@ -136,12 +143,17 @@ class App:
             levels = self.heist.levels_of(sid)
             maps[str(sid)] = {
                 "levels": levels,
-                "markers": {str(lv): [{"kind": m["kind"], "x": round(m["art"][0], 1), "y": round(m["art"][1], 1)}
+                "markers": {str(lv): [{"kind": m["kind"], "x": round(m["art"][0], 1), "y": round(m["art"][1], 1),
+                                       "floor": m["floor"]}
                                       for m in self.heist.markers(sid, lv)] for lv in levels},
+                # the rooms with a second floor, each as its box on the picture (about 0.9 s for the 21 maps:
+                # it looks at the game's upper pictures to see where a floor is really drawn)
+                "upstairs": [{"room": u["room"], "rect": list(u["rect"])} for u in self.heist.upstairs(sid)],
             }
-            webp = os.path.join(self.web_dir, f"{sid}.webp")
-            if not os.path.exists(webp):
-                self.heist.art(sid).save(webp, "WEBP", quality=WEBP_QUALITY)
+            for name, art in ((f"{sid}.webp", self.heist.art), (f"{sid}-upper.webp", self.heist.upper_art)):
+                webp = os.path.join(self.web_dir, name)
+                if not os.path.exists(webp):
+                    art(sid).save(webp, "WEBP", quality=WEBP_QUALITY)
         self.maps_json = json.dumps({
             "pools": {str(lv): self.heist.pool(lv) for lv in eggheist.TEAM_LEVELS},
             "levels": {str(k): v for k, v in eggheist.LEVEL_NAMES.items()},
@@ -346,9 +358,9 @@ class App:
                         return self.send(200, "application/json", json.dumps(app.latest).encode())
                 if p == "/api/maps":
                     return self.send(200, "application/json", app.maps_json)
-                m = re.fullmatch(r"/maps/(\d+)\.webp", p)
+                m = re.fullmatch(r"/maps/(\d+)(-upper)?\.webp", p)      # the map, or its upper floors
                 if m and int(m.group(1)) in app.map_ids:
-                    with open(os.path.join(app.web_dir, f"{m.group(1)}.webp"), "rb") as f:
+                    with open(os.path.join(app.web_dir, f"{m.group(1)}{m.group(2) or ''}.webp"), "rb") as f:
                         return self.send(200, "image/webp", f.read())
                 m = re.fullmatch(r"/icons/(\w+)\.png", p)
                 if m and m.group(1) in app.icons:
@@ -397,6 +409,10 @@ class App:
                     if type(a) not in (int, float) or not lo <= a <= hi:
                         return self.send(400, "text/plain", b"alpha must be a number from 0.2 to 1")
                     change["alpha"] = float(a)
+                if "floors" in body:
+                    if type(body["floors"]) is not bool:
+                        return self.send(400, "text/plain", b"floors must be true or false")
+                    change["floors"] = body["floors"]
                 app.set_overlay(**change)
                 self.send(200, "application/json", json.dumps(app.overlay_settings()).encode())
 

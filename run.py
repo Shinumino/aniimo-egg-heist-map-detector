@@ -30,14 +30,17 @@ import eggheist_capture  # noqa: E402
 import eggheist_server  # noqa: E402
 import game  # noqa: E402
 
-VERSION = "1.0.4"
+VERSION = "1.1.0"
 # the tool's own folder: next to Start.bat in the portable download (this file is in its app folder), else here
 TOOL_DIR = os.path.dirname(HERE) if os.path.isdir(os.path.join(os.path.dirname(HERE), "python")) else HERE
 SETTINGS = os.path.join(TOOL_DIR, "settings.json")
 LOG_FILE = os.path.join(TOOL_DIR, "log.txt")
 log = eggheist_server.log
 CACHE = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "AniimoEggHeistMapDetector")
-READY = "ready.txt"   # written last: a first start that was interrupted is simply done again
+# Written last: a first start that was interrupted is simply done again. The number is what the folder holds:
+# 2 = each map's upper floors too (1.1.0). A folder left by 1.0.x has "ready.txt" and no upper pictures, so it is
+# read again with the "First start" message, rather than the pictures being fetched late and without a word.
+READY = "ready-2.txt"
 
 
 def load(check):
