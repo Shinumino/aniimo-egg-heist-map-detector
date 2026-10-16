@@ -70,8 +70,9 @@ never show you a map that is not right.
 - **It picked a wrong map:** the screenshot it used is in the `captures` folder, and `log.txt` says why it chose
   that map. Please open an [issue](https://github.com/Shinumino/aniimo-egg-heist-map-detector/issues) with the
   picture, `log.txt` and the map it should have been.
-- **Chaos:** the game's data has no egg nest rooms for Chaos. The only nests shown there are the ones in locked
-  rooms, with their %. Not checked in a real Chaos run yet.
+- **Chaos:** the game's data has no egg nest rooms for Chaos. When the page shows Chaos, the only nests on it
+  are the ones in locked rooms, with their %. The overlay shows Nightmare's nests for both, since you pick
+  *Nightmare / Chaos* as one. Not checked in a real Chaos run yet.
 
 ## For developers
 

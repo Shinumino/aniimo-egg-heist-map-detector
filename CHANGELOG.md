@@ -11,7 +11,8 @@ Works with Aniimo build 3732728.
   floors are in one map. The *Second floors* button on the page turns this off if you want the map bigger.
 - Locked rooms can have an egg. Inside a locked room the game puts a nest in some runs only, and the map now
   shows it with how often: 16% to 25% on Normal, 25% to 50% on Hard, 21% to 50% on Nightmare and Chaos. The %
-  is worked out from the game's data, not counted in real runs. On Chaos these are the only nests shown.
+  is worked out from the game's data, not counted in real runs. When the page shows Chaos, these are the only
+  nests on it.
   Thanks to the player who reported it.
 - On Hard map 20045 and Nightmare / Chaos maps 20032, 20034, 20037, 20039 and 20040, one locked room had no key
   on the map. Fixed: every locked room shows its key.
