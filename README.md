@@ -28,10 +28,12 @@ The page opens in your browser at http://127.0.0.1:8765. It is only reachable fr
   should go. The *Opacity* slider sets how solid it is, **F8** hides it for a moment, *Off* removes it. The
   overlay shows over the game in borderless or windowed mode, not in exclusive fullscreen.
 - **Egg nests:** the marked rooms are where an egg *can* be. The game picks which of them get an egg each run.
+- **Locked rooms:** a key marks a room you need a key to open. Inside, a nest is only there in some runs: the
+  egg icon in a locked room says how often (25% = about one run in four).
 - **Second floors:** a room outlined and tagged **2F** has an upstairs, reached by the stairs inside that room.
   On the page, *Ground / Upper* switches to the game's picture of the upper floors, and a line says which floor
   the eggs, the keys and the door are on. The overlay shows both at once: each second floor sits next to its
-  room, joined to it by an arrow. *Second floors* turns that off.
+  room, joined to it by a red arrow. *Second floors* turns that off.
 
 ## What it reads, what it keeps
 
@@ -67,7 +69,8 @@ never show you a map that is not right.
 - **It picked a wrong map:** the screenshot it used is in the `captures` folder, and `log.txt` says why it chose
   that map. Please open an [issue](https://github.com/Shinumino/aniimo-egg-heist-map-detector/issues) with the
   picture, `log.txt` and the map it should have been.
-- **Chaos:** the game's data has no egg nest spots for Chaos, so none are shown there.
+- **Chaos:** the game's data has no egg nest rooms for Chaos. The only nests shown there are the ones in locked
+  rooms, with their %. Not checked in a real Chaos run yet.
 
 ## For developers
 

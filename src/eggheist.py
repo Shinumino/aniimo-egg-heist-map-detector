@@ -34,14 +34,15 @@ LIBRARY = 10000   # the scene holding the room library every map instantiates
 TEAM_LEVELS = (3, 4, 5, 6)
 LEVEL_NAMES = {3: "Normal", 4: "Hard", 5: "Nightmare", 6: "Chaos"}
 ROOM_TYPES = {1: "Normal", 2: "Aisle", 3: "Entry", 4: "Entry2", 5: "Reward", 6: "EggNest"}  # RandomMapConst.lua
-# key rooms are named per difficulty in the sandbox names; Chaos has no key room of its own in the data,
-# its egg nests are the Nightmare ones "migrated" (蛋巢（混沌）迁移), so it uses the Nightmare key room
-KEY_ROOM = {3: "普通钥匙房", 4: "困难钥匙房", 5: "噩梦钥匙房", 6: "噩梦钥匙房"}
 SPAWN_PORTAL, DOOR_PORTAL = "入口传送门", "地宫传送门"   # map icons Uderground_Front_Door / Uderground_Begin
 SANDBOX_EGG_NEST = 4   # sandBoxConfigType of egg nests; sandBoxLevel = hardLv
 # map_mark_resource_data ids of the icons the map screen draws (Scene.10000.scene_mark_point_data.markConfigId)
 MARK_SPAWN, MARK_DOOR, MARK_EGG = {1009}, {1008}, {1014}   # Uderground_Front_Door, Uderground_Begin, GrabEgg_Lair
 MARK_KEY = {1996, 1997, 1998, 1011}                        # blue / purple / gold key room, key door
+# A locked room is marked wherever the game draws one of those icons, not by the piece's name. Matching names
+# (钥匙房, key room, per difficulty) missed the key DOORS (困难/噩梦钥匙门) of room 40_005_Key on Hard and
+# Nightmare: six maps showed nothing on a locked room (a player's report, 2026-10-15). In build 3732728 exactly
+# nine library pieces carry a key icon, and each of the 31 locked rooms on the team maps lists exactly one.
 # Second floors. What an Egg Heist room tells the map screen when you go upstairs (changeMapLayerData's
 # arguments), which is also the address of the picture shown then:
 # MapRes/Texture/<id>_1/2/UI_Img_Map_Layer_<id>_1_2_0_<col>_<row>.png
@@ -81,7 +82,7 @@ class Heist:
         self.born = _get(self.pm.module("rob_egg_born_data"), MODE)
         self.sandboxes = self.pm.module(f"Scene.{LIBRARY}.scene_sandbox_data")
         self.out = out
-        self._rooms, self._art, self._marks = {}, {}, None
+        self._rooms, self._art, self._marks, self._spawners = {}, {}, None, None
         self._boxes, self._upstairs = None, {}
 
     # -- which maps -------------------------------------------------------------------------------------
@@ -129,49 +130,84 @@ class Heist:
 
     def _marks_of(self, sb_id):
         """The map marks a library sandbox carries: (markConfigId, room-local position)."""
+        return [(cid, pos) for _, cid, pos in self._mark_rows(sb_id)]
+
+    def _mark_rows(self, sb_id):
+        """The same, each with the mark's id first, which is the id of the thing it marks (an entity a spawner
+        can place)."""
         if self._marks is None:
             self._marks = {}
-            for p in self.pm.module(f"Scene.{LIBRARY}.scene_mark_point_data").values():
-                self._marks.setdefault(int(p.get("sandboxId") or 0), []).append((p["markConfigId"], p["markPosition"]))
+            for k, p in self.pm.module(f"Scene.{LIBRARY}.scene_mark_point_data").items():
+                self._marks.setdefault(int(p.get("sandboxId") or 0), []).append(
+                    (int(k), p["markConfigId"], p["markPosition"]))
         return self._marks.get(int(sb_id), [])
+
+    def _nest_chance(self, sb_id):
+        """A locked room's own egg nest: (where, the share of runs it is there), or None if it has none.
+        The room's spawner places one of its weighted variants each run (spawnGroups, by weight); the nest is
+        the entity carrying the egg icon, so its share is the weight of the variants that hold it over all of
+        them. Build 3732728: every key piece has one, 16% to 50%, in the same spot in each variant that has it."""
+        nests = {mid: pos for mid, cid, pos in self._mark_rows(sb_id) if cid in MARK_EGG}
+        if not nests:
+            return None
+        if self._spawners is None:
+            self._spawners = self.pm.module(f"Scene.{LIBRARY}.scene_spawner_data")
+        for sp_id in (_get(self.sandboxes, sb_id) or {}).get("spawners") or []:
+            groups = (_get(self._spawners, sp_id) or {}).get("spawnGroups") or []
+            hit = [g for g in groups if isinstance(g["spawnIds"], list) and nests.keys() & set(g["spawnIds"])]
+            total = sum(g["weight"] for g in groups)
+            if hit and total:
+                where = nests[next(i for i in hit[0]["spawnIds"] if i in nests)]
+                return where, sum(g["weight"] for g in hit) / total
+        return None
+
+    def _mark_of(self, sb_id, kinds):
+        """Where the game draws this sandbox's icon of one of `kinds`; None if it has none."""
+        for cid, pos in self._marks_of(sb_id):
+            if cid in kinds:
+                return pos
+        return None
 
     def _at_mark(self, sb_id, kinds, fallback):
         """Where the game draws this sandbox's icon of one of `kinds`; the sandbox origin if it has none.
         The key-room marks sit up to ~20 units from their sandbox origin (a real run's key icon was 89 px
         off before this), portals and nests within ~2."""
-        for cid, pos in self._marks_of(sb_id):
-            if cid in kinds:
-                return pos
-        return fallback
+        pos = self._mark_of(sb_id, kinds)
+        return fallback if pos is None else pos
 
     def markers(self, sid, hard_lv):
         """Everything worth pointing at, for one difficulty: spawn, door, egg (possible), key, reward, unique.
-        Each says which floor it is on: 1, or 2 when it stands on the room's upper floor."""
+        Each says which floor it is on: 1, or 2 when it stands on the room's upper floor. An egg's `chance` is
+        None in a nest room (the game picks which nest rooms get an egg, odds unknown) and the share of runs
+        its nest is there for a locked room's own nest (_nest_chance)."""
         out = []
         boxes = self._layer_boxes()
         for room in self.rooms(sid):
             starts = [boxes[int(i)][1] for i in room.get("sandboxIds", []) if int(i) in boxes]
-            found = []
+            found = []     # (kind, room-local position, chance)
             for sb_id in room.get("sandboxIds", []):
                 sb = _get(self.sandboxes, sb_id) or {}
                 name, pos = sb.get("name", ""), sb.get("position", [0, 0, 0])
                 if SPAWN_PORTAL in name:
-                    found.append(("spawn", self._at_mark(sb_id, MARK_SPAWN, pos)))
+                    found.append(("spawn", self._at_mark(sb_id, MARK_SPAWN, pos), None))
                 elif DOOR_PORTAL in name:
-                    found.append(("door", self._at_mark(sb_id, MARK_DOOR, pos)))
+                    found.append(("door", self._at_mark(sb_id, MARK_DOOR, pos), None))
                 elif sb.get("sandBoxConfigType") == SANDBOX_EGG_NEST and sb.get("sandBoxLevel") == hard_lv:
-                    if not any(k == "egg" for k, _ in found):   # one nest per room per difficulty
-                        found.append(("egg", self._at_mark(sb_id, MARK_EGG, pos)))
-                elif KEY_ROOM[hard_lv] in name:
-                    found.append(("key", self._at_mark(sb_id, MARK_KEY, pos)))
+                    if not any(k == "egg" for k, _, _ in found):   # one nest per room per difficulty
+                        found.append(("egg", self._at_mark(sb_id, MARK_EGG, pos), None))
+                elif (key := self._mark_of(sb_id, MARK_KEY)) is not None:
+                    found.append(("key", key, None))
+                    if (nest := self._nest_chance(sb_id)) is not None:
+                        found.append(("egg", *nest))
             if room["roomType"] == 5:
-                found.append(("reward", [0, 0, 0]))
+                found.append(("reward", [0, 0, 0], None))
             if "Uniq" in room["resId"]:
-                found.append(("unique", [0, 0, 0]))
-            for kind, pos in found:
+                found.append(("unique", [0, 0, 0], None))
+            for kind, pos, chance in found:
                 wx, wz = self._room_to_world(room, pos)
                 out.append({"kind": kind, "world": (wx, wz), "art": self.world_to_art(sid, wx, wz),
-                            "room": room["id"], "prefab": room["resId"][1:-7], "floor": floor_of(pos[1], starts)})
+                            "room": room["id"], "prefab": room["resId"][1:-7], "floor": floor_of(pos[1], starts),
+                            "chance": chance})
         return out
 
     @staticmethod

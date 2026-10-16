@@ -143,8 +143,9 @@ class App:
             levels = self.heist.levels_of(sid)
             maps[str(sid)] = {
                 "levels": levels,
+                # "chance": only on a locked room's own egg nest, the share of runs it is there (eggheist.markers)
                 "markers": {str(lv): [{"kind": m["kind"], "x": round(m["art"][0], 1), "y": round(m["art"][1], 1),
-                                       "floor": m["floor"]}
+                                       "floor": m["floor"], **({"chance": m["chance"]} if m["chance"] else {})}
                                       for m in self.heist.markers(sid, lv)] for lv in levels},
                 # the rooms with a second floor, each as its box on the picture (about 0.9 s for the 21 maps:
                 # it looks at the game's upper pictures to see where a floor is really drawn)

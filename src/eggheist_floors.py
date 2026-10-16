@@ -22,6 +22,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ACCENT = (233, 185, 73, 255)   # the page's accent colour
+# User, 2026-10-15: "a red arrow pointing to the second floor". Only the arrow is red (chosen over the outlines and
+# the 2F tag too): gold frames the two floors, red is the one thing that says "go here".
+ARROW = (226, 52, 45, 255)
 INK = (17, 17, 17, 255)
 PAD = 700        # px of empty room around the 2048 px map for the pulled-out floors: the widest room is ~730 px
 GAP = 28         # clear px between a pulled-out floor and anything else that is drawn
@@ -136,10 +139,10 @@ class Picture:
 
 def _arrow(d, a, q):
     d.line([a, q], fill=INK, width=EDGE)
-    d.line([a, q], fill=ACCENT, width=LINE)
+    d.line([a, q], fill=ARROW, width=LINE)
     ang = math.atan2(q[1] - a[1], q[0] - a[0])
     d.polygon([q, (q[0] - HEAD * math.cos(ang - 0.45), q[1] - HEAD * math.sin(ang - 0.45)),
-               (q[0] - HEAD * math.cos(ang + 0.45), q[1] - HEAD * math.sin(ang + 0.45))], fill=ACCENT, outline=INK)
+               (q[0] - HEAD * math.cos(ang + 0.45), q[1] - HEAD * math.sin(ang + 0.45))], fill=ARROW, outline=INK)
 
 
 def compose(heist, sid):

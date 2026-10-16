@@ -74,6 +74,20 @@ class RealGameTest(unittest.TestCase):
                   for m in self.heist.markers(sid, lv)}
         self.assertEqual(floors, {1})
 
+    def test_every_locked_room_has_its_key_and_its_egg_chance(self):
+        # a player's report (2026-10-15): locked rooms can hold an egg. Every locked room (a *_Key room piece) shows
+        # its key on every difficulty, 20045's key door room included (missed by 1.0.x), and one egg nest with
+        # the share of runs it is there; a nest room's egg has none
+        for sid in self.heist.team_maps():
+            locked = sorted(r["id"] for r in self.heist.rooms(sid) if "_Key" in r["resId"])
+            for lv in self.heist.levels_of(sid):
+                marks = self.heist.markers(sid, lv)
+                self.assertEqual(sorted(m["room"] for m in marks if m["kind"] == "key"), locked, (sid, lv))
+                chances = [m for m in marks if m["kind"] == "egg" and m["chance"] is not None]
+                self.assertEqual(sorted(m["room"] for m in chances), locked, (sid, lv))
+        eggs = [m for m in self.heist.markers(20036, 5) if m["kind"] == "egg"]
+        self.assertEqual(sorted(m["chance"] for m in eggs if m["chance"]), [0.21, 0.5])
+
     def test_the_real_screenshots_give_the_same_maps(self):
         for name, (sid, lv) in EXPECTED.items():
             img = self.cv2.imread(os.path.join(FIX, name + ".jpg"))

@@ -7,8 +7,13 @@ Works with Aniimo build 3732728.
 - Second floors. Rooms that have an upstairs are outlined and tagged 2F on the map.
 - On the page, a Ground / Upper switch shows the game's own picture of the upper floors. A line under it says
   which floor the eggs, the keys and the door are on. On every map so far: all on the ground floor.
-- On the overlay, each second floor is drawn next to its room with an arrow from the room to it, so both floors
-  are in one map. The *Second floors* button on the page turns this off if you want the map bigger.
+- On the overlay, each second floor is drawn next to its room with a red arrow from the room to it, so both
+  floors are in one map. The *Second floors* button on the page turns this off if you want the map bigger.
+- Locked rooms can have an egg. Inside a locked room the game puts a nest in some runs only, and the map now
+  shows it with how often: 16% to 25% on Normal, 25% to 50% on Hard, 21% to 50% on Nightmare and Chaos. On
+  Chaos these are the only nests shown. Thanks to the player who reported it.
+- On Hard map 20045 and Nightmare / Chaos maps 20032, 20034, 20037, 20039 and 20040, one locked room had no key
+  on the map. Fixed: every locked room shows its key.
 - The first start after updating reads the map pictures again (about 20 seconds): it now keeps the upper floors
   too.
 

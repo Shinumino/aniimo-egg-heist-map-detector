@@ -33,6 +33,12 @@ ICONS = {"spawn": "Img_Map_Mark_Uderground_Front_Door", "door": "Img_Map_Mark_Ud
          "egg": "Img_Map_Mark_GrabEgg_Lair", "key": "Img_Map_Mark_Uderground_Key_Orange"}
 ICON_ART_PX = 110                             # icon size in 2048-px art units, as on the page
 DOTS = {"reward": ((199, 155, 255), "R"), "unique": ((201, 201, 201), "U")}
+CHANCE_PX = 56                                # the "25%" beside a locked room's egg nest, in art units
+
+
+def chance_text(chance):
+    """A locked room's egg nest: the share of runs it is there, as the page writes it too (25%)."""
+    return f"{round(chance * 100)}%"
 
 
 def _font(px):
@@ -112,6 +118,10 @@ class Cards:
             if m["kind"] in self.icons:
                 ic = self.icons[m["kind"]].resize((ICON_ART_PX, ICON_ART_PX), Image.LANCZOS)
                 mp.alpha_composite(ic, (int(x - ICON_ART_PX / 2), int(y - ICON_ART_PX / 2)))
+                if m.get("chance"):
+                    # user, 2026-10-15 (picked from three): "an egg icon in the locked room with the chance next to it"
+                    d.text((x + ICON_ART_PX / 2 + 6, y), chance_text(m["chance"]), font=_font(CHANCE_PX),
+                           fill=(255, 255, 255, 255), anchor="lm", stroke_width=7, stroke_fill=(17, 17, 17, 255))
             elif m["kind"] in DOTS:
                 color, ch = DOTS[m["kind"]]
                 d.ellipse((x - 30, y - 30, x + 30, y + 30), fill=color + (255,), outline=(17, 17, 17, 255), width=5)

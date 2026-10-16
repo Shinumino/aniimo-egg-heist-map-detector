@@ -100,6 +100,7 @@
         <img src="/icons/Img_Map_Mark_Uderground_Front_Door.png" alt=""><span>Spawn</span>
         <img src="/icons/Img_Map_Mark_Uderground_Begin.png" alt=""><span>Door</span>
         <img src="/icons/Img_Map_Mark_GrabEgg_Lair.png" alt=""><span>Egg nest (only some get an egg each run)</span>
+        <img src="/icons/Img_Map_Mark_GrabEgg_Lair.png" alt=""><span>Egg nest in a locked room, with the % of runs it is there</span>
         <img src="/icons/Img_Map_Mark_Uderground_Key_Orange.png" alt=""><span>Key</span>
         <span class="dot" style="background:#c79bff">R</span><span>Reward room</span>
         <span class="dot" style="background:#c9c9c9">U</span><span>Unique building</span>
@@ -181,6 +182,18 @@ function draw() {
       img.dataset.kind = m.kind;
       if (faint) img.setAttribute("opacity", 0.3);
       svg.append(img);
+      if (m.chance) {
+        // a locked room's own egg nest: the share of runs it is there (user, 2026-10-15: "an egg icon in the
+        // locked room with the chance next to it")
+        const t = document.createElementNS(ns, "text");
+        t.setAttribute("x", m.x + ICON_SIZE / 2 + 6); t.setAttribute("y", m.y + 20);
+        t.setAttribute("font-size", 56); t.setAttribute("font-weight", 700); t.setAttribute("fill", "#fff");
+        t.setAttribute("stroke", "#111"); t.setAttribute("stroke-width", 14); t.setAttribute("paint-order", "stroke");
+        t.dataset.chance = m.chance;
+        if (faint) t.setAttribute("opacity", 0.3);
+        t.textContent = `${Math.round(m.chance * 100)}%`;
+        svg.append(t);
+      }
     } else if (DOT[m.kind]) {
       const [color, ch] = DOT[m.kind];
       const g = document.createElementNS(ns, "g");
@@ -225,8 +238,13 @@ function renderSide() {
   others.querySelectorAll("button").forEach((b) => (b.onclick = () => show(+b.dataset.map, null, shown.match)));
   const levels = data.maps[id].levels;
   $("levelcard").hidden = levels.length < 2;
-  const eggs = (data.maps[id].markers[shown.level] || []).filter((m) => m.kind === "egg").length;
-  $("levelnote").hidden = eggs > 0;
+  // nest rooms vs a locked room's own nest (it has a chance): Chaos has no nest room in the data, only those
+  const eggs = (data.maps[id].markers[shown.level] || []).filter((m) => m.kind === "egg");
+  const locked = eggs.filter((m) => m.chance).length;
+  $("levelnote").hidden = eggs.length > locked;
+  $("levelnote").textContent = locked
+    ? "No egg nest rooms for this difficulty in the game data: only the locked rooms can have a nest (the %). Not checked in a real run yet."
+    : "No egg nest spots for this difficulty in the game data. The eggs may be placed another way; not checked in a real run yet.";
   $("levels").replaceChildren(...levels.map((lv) => {
     const b = el("button", { text: levelName(lv), "aria-pressed": String(String(lv) === String(shown.level)) });
     b.onclick = () => show(id, lv, shown.match);
